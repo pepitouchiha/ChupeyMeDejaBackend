@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+brainfreeze.db
+.env
+credentials.json
+authorized_user.json
+logs/
