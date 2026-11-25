@@ -24,7 +24,7 @@ solo se loguean como warning (ver `sheets_service.py`), nunca rompen la
 API. Lo único que se pierde si el token expira es el respaldo automático
 a la hoja de cálculo.
 
-El equipo de BrainFreeze quedó instalado y corriendo en el PC del cliente
+El equipo de Chupe y Me Deja quedó instalado y corriendo en el PC del cliente
 (entrega de equipo el 2026-09-04); la publicación de la app OAuth se debe
 terminar de gestionar de forma remota desde la cuenta de Google
 (`andresfit15@gmail.com`), sin necesidad del PC del cliente — **excepto**
@@ -38,14 +38,14 @@ Console, para que el refresh token deje de expirar cada 7 días.
 **Ya hecho (2026-09-04):**
 - Repo público `brainfreeze-legal` (github.com/pepitouchiha/brainfreeze-legal)
   con `index.html`, `privacy.html`, `terms.html` — página principal,
-  política de privacidad y términos de servicio de BrainFreeze.
+  política de privacidad y términos de servicio de Chupe y Me Deja.
 - GitHub Pages activado sobre ese repo (branch `main`, `/root`), publicado en
   `https://pepitouchiha.github.io/brainfreeze-legal/`.
 - Propiedad `https://pepitouchiha.github.io/brainfreeze-legal/` verificada en
   Google Search Console con la cuenta `andresfit15@gmail.com` (método
   archivo HTML, `googleb6088f8891db89fb.html`, commiteado en el repo).
 - Campos de "Marca" en la pantalla de consentimiento de OAuth completados
-  (nombre de la app `BrainFreeze`, correo de asistencia, enlaces a las 3
+  (nombre de la app `Chupe y Me Deja`, correo de asistencia, enlaces a las 3
   páginas de arriba).
 
 **Pendiente:**
@@ -72,7 +72,7 @@ Console, para que el refresh token deje de expirar cada 7 días.
 - [ ] `backend/authorized_user.json` en el PC del cliente fue regenerado
       *después* de que la app quedó en producción.
 - [ ] Una sincronización real (crear/editar una categoría, producto, insumo
-      o venta) se refleja en el spreadsheet `BrainFreeze POS` sin errores en
+      o venta) se refleja en el spreadsheet `Chupe y Me Deja POS` sin errores en
       el log del backend, corriendo varios días después sin intervención
       manual (confirma que el token no expiró).
 

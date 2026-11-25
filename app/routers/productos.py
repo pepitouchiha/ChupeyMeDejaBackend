@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core import config
-from app.core.security import require_auth
+from app.core.security import require_sede, solo_admin
 from app.db.session import get_db
 from app.models.categoria import Categoria
-from app.models.producto import Producto
-from app.schemas.producto import ProductoCreate, ProductoOut, ProductoUpdate
-from app.services.sheets_service import sync_producto_to_sheets
+from app.models.insumo import Insumo
+from app.models.producto import Producto, ProductoInsumo
+from app.schemas.producto import ProductoCreate, ProductoInsumoIn, ProductoOut, ProductoUpdate
 
-router = APIRouter(prefix="/productos", tags=["productos"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/productos", tags=["productos"], dependencies=[Depends(require_sede)])
 
 
 def _validar_categoria(db: Session, categoria_id: int) -> Categoria:
@@ -21,18 +20,6 @@ def _validar_categoria(db: Session, categoria_id: int) -> Categoria:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Categoría no encontrada")
     return categoria
 
-
-def _producto_dict_para_sheets(producto: Producto, categoria_nombre: str) -> dict[str, object]:
-    return {
-        "id": producto.id,
-        "nombre": producto.nombre,
-        "categoria_nombre": categoria_nombre,
-        "precio": producto.precio,
-        "costo": producto.costo,
-        "estado": producto.estado,
-        "sabor": producto.sabor,
-        "tamano": producto.tamano,
-    }
 
 
 @router.get("", response_model=list[ProductoOut])
@@ -57,10 +44,9 @@ def obtener_producto(producto_id: int, db: Session = Depends(get_db)) -> Product
     return producto
 
 
-@router.post("", response_model=ProductoOut, status_code=status.HTTP_201_CREATED)
+@router.post("", dependencies=[solo_admin], response_model=ProductoOut, status_code=status.HTTP_201_CREATED)
 def crear_producto(
     payload: ProductoCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Producto:
     categoria = _validar_categoria(db, payload.categoria_id)
@@ -78,20 +64,14 @@ def crear_producto(
     db.commit()
     db.refresh(producto)
 
-    if config.SHEETS_SYNC_ENABLED:
-        background_tasks.add_task(
-            sync_producto_to_sheets, _producto_dict_para_sheets(producto, categoria.nombre)
-        )
-
     return producto
 
 
-@router.put("/{producto_id}", response_model=ProductoOut)
-@router.patch("/{producto_id}", response_model=ProductoOut)
+@router.put("/{producto_id}", dependencies=[solo_admin], response_model=ProductoOut)
+@router.patch("/{producto_id}", dependencies=[solo_admin], response_model=ProductoOut)
 def actualizar_producto(
     producto_id: int,
     payload: ProductoUpdate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Producto:
     producto = db.get(Producto, producto_id)
@@ -122,18 +102,46 @@ def actualizar_producto(
     db.commit()
     db.refresh(producto)
 
-    if config.SHEETS_SYNC_ENABLED:
-        categoria_nombre = (
-            categoria.nombre if categoria is not None else _validar_categoria(db, producto.categoria_id).nombre
-        )
-        background_tasks.add_task(
-            sync_producto_to_sheets, _producto_dict_para_sheets(producto, categoria_nombre)
-        )
-
     return producto
 
 
-@router.delete("/{producto_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.put("/{producto_id}/insumos", dependencies=[solo_admin], response_model=ProductoOut)
+def reemplazar_insumos_producto(
+    producto_id: int,
+    payload: list[ProductoInsumoIn],
+    db: Session = Depends(get_db),
+) -> Producto:
+    """Reemplaza la receta completa del producto (lista vacía = no consume nada)."""
+    producto = db.get(Producto, producto_id)
+    if producto is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
+
+    ids = [linea.insumo_id for linea in payload]
+    repetidos = sorted({i for i in ids if ids.count(i) > 1})
+    if repetidos:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"insumo_id repetido en la receta: {repetidos}",
+        )
+    existentes = (
+        {i for (i,) in db.query(Insumo.id).filter(Insumo.id.in_(ids)).all()} if ids else set()
+    )
+    faltantes = sorted(set(ids) - existentes)
+    if faltantes:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, detail=f"Insumo(s) no encontrado(s): {faltantes}"
+        )
+
+    producto.insumos.clear()
+    db.flush()
+    for linea in payload:
+        producto.insumos.append(ProductoInsumo(insumo_id=linea.insumo_id, cantidad=linea.cantidad))
+    db.commit()
+    db.refresh(producto)
+    return producto
+
+
+@router.delete("/{producto_id}", dependencies=[solo_admin], status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def eliminar_producto(producto_id: int, db: Session = Depends(get_db)) -> None:
     producto = db.get(Producto, producto_id)
     if producto is None:

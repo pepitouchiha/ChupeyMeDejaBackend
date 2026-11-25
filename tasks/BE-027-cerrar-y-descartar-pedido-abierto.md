@@ -233,7 +233,7 @@ encadenado. Casos verificados, todos exitosos:
 
 Servidor y bases de datos temporales detenidos/eliminados del scratchpad de
 la sesión al finalizar (`netstat` confirmó sin listeners activos en los
-puertos de prueba); no se tocó `backend/brainfreeze.db` real en ningún
+puertos de prueba); no se tocó `backend/chupeymedeja.db` real en ningún
 momento (confirmado con `git status`).
 
 ## Revisión
@@ -242,7 +242,7 @@ momento (confirmado con `git status`).
 
 Flujo completo verificado end-to-end (servidor `uvicorn` propio en puerto
 8300, SQLite temporal, `SHEETS_SYNC_ENABLED=false`, nunca se tocó
-`backend/brainfreeze.db`):
+`backend/chupeymedeja.db`):
 
 - Abrir mesa -> agregar 2 cafés + 1 postre + 1 jugo -> quitar jugo (total
   `18000`) -> `POST /ventas/{id}/cerrar {"metodo_pago":"efectivo"}` ->

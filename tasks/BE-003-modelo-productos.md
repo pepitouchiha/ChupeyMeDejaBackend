@@ -199,7 +199,7 @@ respuesta HTTP cruda usa UTF-8 correctamente para "Limón" (el mojibake que
 apareció en algunas salidas de consola durante las pruebas fue únicamente un
 artefacto del codepage de la terminal de Windows al decodificar stdin, no un
 bug de la API/DB — verificado inspeccionando los bytes crudos de la
-respuesta). No quedó ningún `brainfreeze.db` ni proceso de prueba corriendo
+respuesta). No quedó ningún `chupeymedeja.db` ni proceso de prueba corriendo
 tras la verificación.
 
 ## Revisión
@@ -248,4 +248,4 @@ código de esta tarea. Tipado completo con Pydantic + `Mapped[...]`. Código
 limpio, sin abstracciones prematuras.
 
 Todos los criterios de aceptación se cumplen. Se limpiaron los procesos y la
-DB de prueba (`brainfreeze.db`) generados durante esta revisión.
+DB de prueba (`chupeymedeja.db`) generados durante esta revisión.

@@ -1,176 +1,108 @@
-# BrainFreeze — Backend
+# Chupe y Me Deja — Backend
 
-API REST para BrainFreeze, un sistema de punto de venta para una heladería/granizadería: catálogo de productos, control de inventario, gestión de mesas, registro de ventas y reportes de contabilidad.
+API REST del punto de venta de **Chupe y Me Deja** (granizados y bebidas), con
+dos sedes en Copacabana: Asunción y Machado. Maneja menú, inventario, mesas,
+caja, ventas, gastos, personal y contabilidad, **separados por sede**.
 
-Construido con **FastAPI + SQLAlchemy 2.0 + SQLite**, autenticación por **JWT**.
+**FastAPI + SQLAlchemy 2.0 + PostgreSQL (Supabase)**, autenticación con **JWT**.
+En desarrollo local puede usar SQLite sin instalar nada más.
 
-## Stack
+La guía para publicarlo en internet está en [`DESPLIEGUE.md`](DESPLIEGUE.md).
 
-- Python 3.10+
-- FastAPI 0.115
-- SQLAlchemy 2.0 (estilo `DeclarativeBase`)
-- SQLite (archivo local, sin servidor de DB externo)
-- Autenticación: JWT (`pyjwt`) + hashing de contraseñas con `bcrypt`
+## Cómo funcionan las sedes (multi-tenant)
+
+- Cada sede es un *tenant*: tiene sus propias categorías, productos, insumos,
+  mesas, caja, ventas, gastos, trabajadores y configuración de impresión.
+- Todas las tablas de negocio heredan `SedeScoped` (`app/models/sede.py`) y
+  tienen columna `sede_id`.
+- `app/db/tenancy.py` agrega `WHERE sede_id = <sede activa>` a **todas** las
+  consultas del ORM y asigna `sede_id` al crear registros. Si una consulta toca
+  datos de sede sin sede activa, falla en vez de devolver datos de todas.
+- La sede activa la fija `require_sede` (`app/core/security.py`):
+  - **Administrador y cajero:** siempre su sede; no pueden pedir otra.
+  - **Super admin y dueño:** eligen la sede con el encabezado `X-Sede-Id`.
+
+## Usuarios y roles
+
+| Rol | Qué puede hacer | Quién crea la cuenta |
+|---|---|---|
+| `superadmin` | Todo. Crea sedes y cuentas de dueño, administrador y cajero. | Solo el comando `crear_superadmin` |
+| `dueno` | Opera todas las sedes. Crea cajeros en cualquier sede. | Super admin |
+| `administrador` | Todo dentro de su sede: menú, inventario, gastos, trabajadores, contabilidad, configuración, editar o cancelar ventas. Crea cajeros de su sede. | Super admin |
+| `cajero` | Operar su sede: vender, mesas, abrir y cerrar caja, ver órdenes y registrar gastos. | Super admin, dueño o administrador de su sede |
+
+- **Sin registro público:** no existe ningún endpoint para crear cuentas sin
+  sesión. El super admin se crea con `python -m app.scripts.crear_superadmin`
+  y nadie puede crear, editar ni eliminar un super admin desde la app.
+- **Login:** `POST /auth/login` devuelve el JWT, el usuario y sus sedes.
+  Se bloquea 15 minutos tras 5 intentos fallidos desde la misma IP y correo.
+- **Revocación:** cambiar la contraseña, desactivar la cuenta o cambiarle el
+  rol o la sede invalida los tokens anteriores (`token_version`).
 
 ## Estructura
 
 ```
 app/
-  main.py              # app FastAPI, CORS, lifespan (create_all), registro de routers
-  core/
-    config.py           # configuración desde variables de entorno (.env)
-    security.py          # hashing de password + emisión/verificación de JWT
-  db/
-    session.py            # engine + SessionLocal + get_db()
-    base.py                # Base declarativa
-    base_all.py             # punto único de importación de todos los modelos
-  models/                    # modelos SQLAlchemy (Categoria, Producto, Insumo, Mesa, Venta, Usuario...)
-  schemas/                    # schemas Pydantic de entrada/salida
-  routers/                     # endpoints por recurso (auth, categorias, productos, insumos, mesas, ventas, reportes, health)
-  scripts/                      # utilidades de línea de comandos (crear_usuario, seed_productos)
+  main.py          app FastAPI, CORS, cabeceras de seguridad, routers
+  core/            config (.env), security (JWT, roles, sede activa), timezone
+  db/              session, base, tenancy (filtro por sede)
+  models/          modelos SQLAlchemy (Sede, Usuario, Venta, Producto, ...)
+  schemas/         schemas Pydantic
+  routers/         endpoints (auth, usuarios/sedes, ventas, caja, ...)
+  services/        caja, inventario, sedes
+  scripts/         crear_superadmin (cuenta inicial / recuperar acceso), seed_productos (datos de ejemplo)
+tests/             pruebas de aislamiento por sede, roles y autenticación
+render.yaml        despliegue en Render
 ```
 
-## Setup
+## Desarrollo local
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\pip install -r requirements.txt
-copy .env.example .env    # y ajustar valores si hace falta
-```
-
-Levantar el servidor:
-
-```powershell
+.\.venv\Scripts\pip install -r requirements-dev.txt
+copy .env.example .env
 .\.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
 ```
 
-En el PC del cliente (producción) usar `iniciar_backend.bat` en vez del comando
-anterior: valida `.env`, el `.venv` y el puerto antes de arrancar, guarda la
-salida en `logs/backend.log` y reintenta si el servidor se cae. Para el
-arranque automático, poner un acceso directo a este `.bat` en `shell:startup`.
+Sin `DATABASE_URL`, usa SQLite en `backend/chupeymedeja.db`. Las tablas se
+crean solas al arrancar. Crea tu cuenta de super admin y las sedes:
 
-La base SQLite (`brainfreeze.db`) se crea automáticamente al arrancar. Verificar que todo funciona:
+```powershell
+.\.venv\Scripts\python -m app.scripts.crear_superadmin tu@correo.com --nombre "Tu nombre" --sede "Asunción|Copacabana" --sede "Machado|Copacabana"
+```
 
+Pruebas:
+
+```powershell
+.\.venv\Scripts\python -m pytest -q
 ```
-GET http://127.0.0.1:8000/health
-→ 200 {"status":"ok","database":"ok"}
-```
+
+Para correrlas contra PostgreSQL, define `TEST_DATABASE_URL` con una base
+vacía y desechable.
 
 ## Variables de entorno
 
-Ver `.env.example`:
+| Variable | Descripción |
+|---|---|
+| `ENVIRONMENT` | `development` (por defecto) o `production`. En producción exige `DATABASE_URL` y un `JWT_SECRET_KEY` propio de 32+ caracteres, y oculta `/docs`. |
+| `DATABASE_URL` | Cadena de conexión. En producción, la de Supabase (*Session pooler*). |
+| `CORS_ORIGINS` | Orígenes permitidos separados por coma, ej. `https://chupeymedeja.netlify.app`. |
+| `JWT_SECRET_KEY` | Secreto para firmar los tokens. |
+| `JWT_EXPIRE_MINUTES` | Duración de la sesión (por defecto 720 = 12 horas). |
+| `LOGIN_MAX_INTENTOS`, `LOGIN_BLOQUEO_MINUTOS` | Límite de intentos de login (por defecto 5 y 15). |
+| `BUSINESS_TIMEZONE` | Zona horaria del negocio (por defecto `America/Bogota`). |
 
-| Variable             | Descripción                                                        |
-|----------------------|---------------------------------------------------------------------|
-| `DATABASE_URL`       | URL de conexión SQLAlchemy (default: SQLite local)                 |
-| `CORS_ORIGINS`       | Orígenes permitidos, separados por coma (default: Vite en 5173)    |
-| `JWT_SECRET_KEY`     | Secreto para firmar los tokens JWT — **cambiar en producción**     |
-| `JWT_ALGORITHM`      | Algoritmo de firma (default: `HS256`)                              |
-| `JWT_EXPIRE_MINUTES` | Minutos de validez del token (default: `480`)                      |
-| `SHEETS_SYNC_ENABLED` | Activa la sincronización a Google Sheets (default: `false`) |
-| `SHEETS_SPREADSHEET_NAME` | Nombre del spreadsheet de Google Sheets (default: `BrainFreeze POS`) |
-| `SHEETS_WORKSHEET_NAME` | Nombre de la hoja de ventas dentro del spreadsheet (default: `Ventas_Diarias`) |
-| `SHEETS_WORKSHEET_CATEGORIAS` | Nombre de la hoja de categorías dentro del spreadsheet (default: `Categorias`) |
-| `SHEETS_WORKSHEET_PRODUCTOS` | Nombre de la hoja de productos dentro del spreadsheet (default: `Productos`) |
-| `SHEETS_WORKSHEET_INSUMOS` | Nombre de la hoja de insumos dentro del spreadsheet (default: `Insumos`) |
-| `SHEETS_CREDENTIALS_FILE` | Ruta al `credentials.json` de OAuth (default: `credentials.json` en la raíz de `backend/`) |
-| `SHEETS_AUTHORIZED_USER_FILE` | Ruta donde se guarda el token autorizado (default: `authorized_user.json` en la raíz de `backend/`) |
+## Recuperar el acceso
 
-## Crear un usuario
+- **Super admin:** vuelve a correr `crear_superadmin` con tu correo (y
+  `DATABASE_URL` apuntando a producción); pone la nueva contraseña y cierra
+  las sesiones anteriores.
+- **Dueños y administradores:** el super admin les restablece la contraseña en **Usuarios**.
+- **Cajeros:** el super admin, el dueño o el administrador de su sede.
 
-No hay endpoint público de registro. El usuario inicial (y cualquier otro) se crea/actualiza vía script:
+## Cambios de esquema
 
-```powershell
-.\.venv\Scripts\python -m app.scripts.crear_usuario admin@brainfreeze.com "MiPasswordSegura123"
-```
-
-## Datos de ejemplo
-
-```powershell
-.\.venv\Scripts\python -m app.scripts.seed_productos
-```
-
-## Sincronización a Google Sheets (backup/dashboard de solo lectura)
-
-Cada venta creada vía `POST /ventas`, cada categoría creada/actualizada vía
-`POST`/`PUT`/`PATCH /categorias`, cada producto creado/actualizado vía
-`POST`/`PUT`/`PATCH /productos` y cada insumo creado/actualizado/ajustado vía
-`POST`/`PUT`/`PATCH /insumos` y `POST /insumos/{id}/ajustar-stock`, puede
-replicarse en segundo plano a una hoja de Google Sheets dentro del mismo
-spreadsheet, como backup externo y dashboard de solo lectura para el dueño del
-negocio. Es un backup de mejor esfuerzo, no la fuente de verdad — si Sheets no
-responde, se pierde esa sincronización puntual y el registro sigue quedando en
-SQLite normalmente. Autenticación OAuth de cuenta personal de Gmail (no cuenta
-de servicio):
-
-- **Ventas** (`Ventas_Diarias`): una fila por venta, actualizada in place
-  (upsert por ID) — se agrega al confirmarse/cerrarse, y se actualiza la
-  misma fila si luego se edita o cancela (columna `Estado`), en vez de
-  agregar filas nuevas o borrar la existente. Un pedido mientras sigue
-  `abierta` (mesa abierta sin cobrar todavía) no se sincroniza — solo al
-  cerrarse.
-- **Categorías** (`Categorias`): una sola fila por categoría, actualizada in
-  place (upsert por ID) cada vez que se crea o edita — no se duplica al
-  editar.
-- **Productos** (`Productos`): una sola fila por producto (columnas `ID
-  Producto`, `Nombre`, `Categoría`, `Precio`, `Estado`, `Sabor`, `Tamaño`),
-  mismo mecanismo de upsert por ID que categorías. `imagen_base64` **nunca**
-  se incluye en la hoja (blobs potencialmente grandes, sin valor como backup
-  legible).
-- **Insumos** (`Insumos`): una sola fila por insumo (columnas `ID Insumo`,
-  `Nombre`, `Categoría`, `Stock`, `Stock mínimo`, `Estado`), mismo mecanismo
-  de upsert por ID que categorías/productos. Además de crear/editar el
-  insumo, **`POST /insumos/{id}/ajustar-stock` también dispara la
-  sincronización** (con el `stock` ya ajustado) — es el endpoint que más
-  importa cubrir, porque es el mecanismo principal por el que cambia el
-  stock día a día. `Estado` refleja el mismo cálculo (`Crítico`/`Bajo`/`OK`)
-  que devuelve la API en `InsumoOut.estado`.
-
-Si alguna de estas hojas no existe todavía dentro del spreadsheet, esa
-entidad simplemente no se sincroniza (se loguea un `warning` de
-`WorksheetNotFound`) — `_get_worksheet` solo busca hojas existentes, no las
-crea automáticamente. Crea manualmente cada hoja que necesites dentro del
-spreadsheet `BrainFreeze POS` (o el valor de `SHEETS_SPREADSHEET_NAME`) antes
-de activar la sincronización correspondiente.
-
-1. En [Google Cloud Console](https://console.cloud.google.com/), crea un
-   proyecto (o reutiliza uno) y genera credenciales **OAuth client ID** tipo
-   **"Aplicación de escritorio"**, usando tu cuenta personal de Gmail (la
-   misma con la que vas a abrir/editar el spreadsheet). Descarga el JSON y
-   guárdalo como `backend/credentials.json` (ya está en `.gitignore`, nunca se
-   sube al repositorio).
-2. Corre el script de autorización una sola vez (abre el navegador para que
-   inicies sesión y autorices el acceso):
-
-   ```powershell
-   .\.venv\Scripts\python -m app.scripts.setup_google_sheets
-   ```
-
-   Esto genera `backend/authorized_user.json` (también en `.gitignore`), que
-   el backend reutiliza en cada sincronización sin volver a interactuar con
-   un navegador.
-3. Activa `SHEETS_SYNC_ENABLED=true` en tu `.env`. Asegúrate de que exista un
-   spreadsheet llamado `BrainFreeze POS` (o el valor de
-   `SHEETS_SPREADSHEET_NAME`), compartido/accesible con la cuenta de Gmail
-   que autorizaste, con una hoja `Ventas_Diarias` (o el valor de
-   `SHEETS_WORKSHEET_NAME`) para ventas, una hoja `Categorias` (o el valor de
-   `SHEETS_WORKSHEET_CATEGORIAS`) para categorías, una hoja `Productos` (o el
-   valor de `SHEETS_WORKSHEET_PRODUCTOS`) para productos y una hoja `Insumos`
-   (o el valor de `SHEETS_WORKSHEET_INSUMOS`) para insumos.
-
-## Endpoints principales
-
-- `POST /auth/login` — login, devuelve `{access_token, token_type}`
-- `GET/POST/PUT/PATCH/DELETE /categorias` — CRUD de categorías
-- `GET/POST/PUT/PATCH/DELETE /productos` — CRUD de productos (filtros `search`, `categoria_id`; incluye `imagen_base64` opcional como Data URL, y `sabor`/`tamano`/`imagen_base64` se pueden limpiar a `null` explícitamente en un `PATCH`; `costo` opcional para calcular margen en reportes)
-- `GET/POST/PUT/PATCH/DELETE /insumos` + `POST /insumos/{id}/ajustar-stock` — inventario (el stock solo se mueve por ajuste explícito, nunca por edición directa)
-- `GET/POST/PUT/PATCH/DELETE /mesas` + `POST /mesas/{id}/liberar` — gestión de mesas (`liberar` responde `409` si la mesa tiene un pedido `abierta` sin cerrar — hay que cobrarlo o descartarlo primero, ver más abajo)
-- `GET/POST/PUT /ventas`, `GET /ventas/{id}`, `POST /ventas/{id}/cancelar` — registro, consulta, edición y cancelación (soft-delete con auditoría) de ventas ya confirmadas. `GET /ventas` filtra por `desde`/`hasta`/`mesa_id`/`estado`. El total y los precios siempre se calculan en el servidor; `metodo_pago` es `efectivo` o `transferencia`; `estado` es `activa`, `cancelada` o `abierta` (ver más abajo). Una venta `cancelada` se excluye de reportes/margen/Sheets, y libera automáticamente su mesa asociada si no hay otra venta activa en ella.
-- **Pedidos progresivos (mesas abiertas)** — `POST /ventas/abrir` (abre un pedido vacío en una mesa, sin método de pago todavía), `POST /ventas/{id}/items` / `PATCH /ventas/{id}/items/{item_id}` / `DELETE /ventas/{id}/items/{item_id}` (agregar productos —se suman a la línea existente del mismo producto y precio—, cambiar la cantidad de una línea o quitarla, mientras el pedido sigue abierto), `POST /ventas/{id}/cerrar` (pide método de pago, cobra, libera la mesa, sincroniza a Sheets), `POST /ventas/{id}/descartar` (si el pedido nunca tuvo items se borra sin dejar rastro — `204`; si tuvo items queda `cancelada` para auditoría — `200`). Mientras un pedido está `abierta` no cuenta en reportes ni se sincroniza a Sheets — solo al cerrarse.
-- `GET /reportes/hoy`, `GET /reportes/mensual`, `GET /reportes/diario` (historial por día: total, ventas, efectivo/transferencia y margen; `desde`/`hasta`, por defecto los últimos 30 días), `GET /reportes/alertas-stock` — reportes para dashboard/contabilidad. Las fechas/horas se calculan en la zona horaria de negocio (`BUSINESS_TIMEZONE`, `America/Bogota` por defecto — ver `app/core/config.py`), no en la hora UTC en la que se guardan los timestamps; excluyen ventas `cancelada`/`abierta` de todos los totales y del margen.
-
-Todos los endpoints salvo `/health` y `/auth/login` requieren `Authorization: Bearer <token>`.
-
-## Proyecto
-
-Este backend se construyó de forma iterativa con un flujo planner → backend-dev → reviewer; el historial de tareas (objetivo, criterios de aceptación, decisiones tomadas y revisión) queda documentado en [`tasks/`](./tasks).
+Las tablas se crean con `create_all` al arrancar. Eso **crea tablas nuevas pero
+no modifica tablas existentes**. Si más adelante se agrega una columna a una
+tabla que ya tiene datos en Supabase, hay que aplicar el cambio con SQL o
+incorporar Alembic.

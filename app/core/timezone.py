@@ -1,19 +1,21 @@
-"""Helpers de conversión hora local (BUSINESS_TIMEZONE) <-> UTC naive (BE-024).
+"""Helpers de conversión hora local (BUSINESS_TIMEZONE) <-> UTC naive.
 
-`Venta.creado_en` se guarda como naive-UTC (SQLite/SQLAlchemy descartan el
-`tzinfo` al persistir). Estos helpers centralizan la conversión entre "hora
-local del negocio" (la que percibe el usuario en Colombia) y los valores
-naive-UTC que hay que usar para filtrar/agrupar contra esa columna, para no
-repetir el mismo truco (`.astimezone(timezone.utc).replace(tzinfo=None)`) en
-cada router.
+Las fechas (`Venta.creado_en`, etc.) se guardan como naive-UTC. Estos helpers
+centralizan la conversión entre "hora local del negocio" (la que percibe el
+usuario en Colombia) y los valores naive-UTC que hay que usar para filtrar y
+agrupar contra esas columnas. Las expresiones SQL funcionan igual en SQLite
+(desarrollo local) y en PostgreSQL (Supabase, producción).
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
-from sqlalchemy import ColumnElement, func
 
-from app.core.config import BUSINESS_TIMEZONE
+from sqlalchemy import ColumnElement, DateTime, String, extract
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.functions import FunctionElement
+
+from app.core.config import BUSINESS_TIMEZONE, BUSINESS_TIMEZONE_NAME
 
 
 def hoy_local() -> date:
@@ -39,28 +41,64 @@ def limites_dia_local(dia: date) -> tuple[datetime, datetime]:
 
 
 def utc_naive_a_local(valor: datetime) -> datetime:
-    """Convierte un `creado_en` naive-UTC (leído de la BD) a hora local, aware."""
+    """Convierte un valor naive-UTC (leído de la BD) a hora local, aware."""
     return valor.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE)
 
 
-def _offset_sqlite_modifier() -> str:
-    """Modifier de `datetime()` de SQLite equivalente al offset de BUSINESS_TIMEZONE.
+class _EnHoraLocal(FunctionElement):
+    """Traslada una columna naive-UTC a la hora local del negocio (naive)."""
 
-    Colombia no tiene horario de verano: el offset es constante para
-    cualquier fecha, así que basta con calcularlo una vez a partir de
-    `BUSINESS_TIMEZONE` (evita hardcodear "-5 hours" como número mágico
-    desconectado de la config).
-    """
+    inherit_cache = True
+    type = DateTime()
+
+
+@compiles(_EnHoraLocal, "sqlite")
+def _en_hora_local_sqlite(element, compiler, **kw):  # noqa: ANN001, ANN202
+    # Colombia no tiene horario de verano: el offset es constante.
     offset = datetime(2000, 1, 1, tzinfo=BUSINESS_TIMEZONE).utcoffset()
     assert offset is not None
     minutos = int(offset.total_seconds() // 60)
-    return f"{minutos:+d} minutes"
+    columna = compiler.process(list(element.clauses)[0], **kw)
+    return f"datetime({columna}, '{minutos:+d} minutes')"
+
+
+@compiles(_EnHoraLocal, "postgresql")
+def _en_hora_local_pg(element, compiler, **kw):  # noqa: ANN001, ANN202
+    columna = compiler.process(list(element.clauses)[0], **kw)
+    return f"timezone('{BUSINESS_TIMEZONE_NAME}', timezone('UTC', {columna}))"
+
+
+class _DiaLocal(FunctionElement):
+    """Fecha local ('YYYY-MM-DD', texto) de una columna naive-UTC."""
+
+    inherit_cache = True
+    type = String()
+
+
+@compiles(_DiaLocal, "sqlite")
+def _dia_local_sqlite(element, compiler, **kw):  # noqa: ANN001, ANN202
+    return f"date({compiler.process(_EnHoraLocal(*element.clauses), **kw)})"
+
+
+@compiles(_DiaLocal, "postgresql")
+def _dia_local_pg(element, compiler, **kw):  # noqa: ANN001, ANN202
+    local = compiler.process(_EnHoraLocal(*element.clauses), **kw)
+    return f"to_char({local}, 'YYYY-MM-DD')"
 
 
 def columna_creado_en_local(columna: ColumnElement) -> ColumnElement:
-    """Expresión SQL que traslada una columna naive-UTC a su hora local.
+    """Expresión SQL con la hora local de una columna naive-UTC."""
+    return _EnHoraLocal(columna)
 
-    Útil para agrupar (`strftime`) por mes/año/hora **local** en vez de UTC,
-    sin tener que traer todas las filas a Python para reagruparlas.
-    """
-    return func.datetime(columna, _offset_sqlite_modifier())
+
+def dia_local(columna: ColumnElement) -> ColumnElement:
+    """Expresión SQL con la fecha local ('YYYY-MM-DD') de una columna naive-UTC."""
+    return _DiaLocal(columna)
+
+
+def anio_local(columna: ColumnElement) -> ColumnElement:
+    return extract("year", _EnHoraLocal(columna))
+
+
+def mes_local(columna: ColumnElement) -> ColumnElement:
+    return extract("month", _EnHoraLocal(columna))

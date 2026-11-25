@@ -71,6 +71,7 @@ class VentaCerrar(BaseModel):
 class VentaItemOut(BaseModel):
     id: int
     producto_id: int
+    nombre_producto: str
     cantidad: int
     precio_unitario: int
 
@@ -80,9 +81,11 @@ class VentaItemOut(BaseModel):
 class VentaOut(BaseModel):
     id: int
     mesa_id: int | None
+    mesa_nombre: str | None
     metodo_pago: MetodoPago | None
     estado: EstadoVenta
     total: int
+    caja_sesion_id: int | None
     creado_en: datetime
     items: list[VentaItemOut]
 

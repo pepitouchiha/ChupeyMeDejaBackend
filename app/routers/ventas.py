@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session, joinedload
 
-from app.core import config
-from app.core.security import require_auth
+from app.core.security import require_sede, solo_admin
 from app.core.timezone import (
     fin_dia_local_a_utc_naive,
     inicio_dia_local_a_utc_naive,
@@ -17,6 +15,8 @@ from app.db.session import get_db
 from app.models.mesa import ESTADO_LIBRE, ESTADO_OCUPADA, Mesa
 from app.models.producto import Producto
 from app.models.venta import ESTADO_ABIERTA, ESTADO_ACTIVA, ESTADO_CANCELADA, Venta, VentaItem
+from app.services import caja as caja_service
+from app.services import inventario
 from app.schemas.venta import (
     EstadoVenta,
     VentaAbrir,
@@ -27,29 +27,9 @@ from app.schemas.venta import (
     VentaOut,
     VentaUpdate,
 )
-from app.services.sheets_service import sync_venta_to_sheets
 
-router = APIRouter(prefix="/ventas", tags=["ventas"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/ventas", tags=["ventas"], dependencies=[Depends(require_sede)])
 
-
-def _venta_a_dict_para_sheets(venta: Venta, productos_por_id: dict[int, Producto]) -> dict[str, Any]:
-    return {
-        "id": venta.id,
-        "creado_en": utc_naive_a_local(venta.creado_en).isoformat(),
-        "metodo_pago": venta.metodo_pago,
-        "mesa_id": venta.mesa_id,
-        "total": venta.total,
-        "estado": venta.estado,
-        "items": [
-            {
-                "producto_id": item.producto_id,
-                "cantidad": item.cantidad,
-                "precio_unitario": item.precio_unitario,
-                "nombre_producto": productos_por_id[item.producto_id].nombre,
-            }
-            for item in venta.items
-        ],
-    }
 
 
 def _mesa_tiene_otra_venta_activa(db: Session, mesa_id: int, excluir_venta_id: int) -> bool:
@@ -88,9 +68,10 @@ def listar_ventas(
 @router.post("", response_model=VentaOut, status_code=status.HTTP_201_CREATED)
 def crear_venta(
     payload: VentaCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Venta:
+    sesion = caja_service.exigir_sesion_abierta(db)
+
     mesa: Mesa | None = None
     if payload.mesa_id is not None:
         mesa = db.get(Mesa, payload.mesa_id)
@@ -126,6 +107,7 @@ def crear_venta(
         mesa_id=payload.mesa_id,
         metodo_pago=payload.metodo_pago.value,
         total=total,
+        caja_sesion_id=sesion.id,
         items=venta_items,
     )
     db.add(venta)
@@ -133,19 +115,23 @@ def crear_venta(
     if mesa is not None:
         mesa.estado = ESTADO_OCUPADA
 
+    db.flush()
+    inventario.descontar_por_venta(db, venta)
+
     db.commit()
     db.refresh(venta)
-
-    if config.SHEETS_SYNC_ENABLED:
-        venta_dict = _venta_a_dict_para_sheets(venta, productos_por_id)
-        background_tasks.add_task(sync_venta_to_sheets, venta_dict)
 
     return venta
 
 
 @router.post("/abrir", response_model=VentaOut, status_code=status.HTTP_201_CREATED)
 def abrir_venta(payload: VentaAbrir, db: Session = Depends(get_db)) -> Venta:
-    """Abre un pedido vacío (estado 'abierta') en una mesa, sin cobrar nada."""
+    """Abre un pedido vacío (estado 'abierta') en una mesa, sin cobrar nada.
+
+    Exige caja abierta: una mesa abierta con la caja cerrada no se podría cobrar.
+    """
+    caja_service.exigir_sesion_abierta(db, caja_service.MENSAJE_CAJA_CERRADA_MESA)
+
     mesa = db.get(Mesa, payload.mesa_id)
     if mesa is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Mesa no encontrada")
@@ -189,11 +175,10 @@ def obtener_venta(venta_id: int, db: Session = Depends(get_db)) -> Venta:
     return venta
 
 
-@router.put("/{venta_id}", response_model=VentaOut)
+@router.put("/{venta_id}", dependencies=[solo_admin], response_model=VentaOut)
 def actualizar_venta(
     venta_id: int,
     payload: VentaUpdate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Venta:
     venta = db.get(Venta, venta_id)
@@ -251,20 +236,20 @@ def actualizar_venta(
     venta.mesa_id = payload.mesa_id
     venta.metodo_pago = payload.metodo_pago.value
 
+    if venta.estado == ESTADO_ACTIVA:
+        inventario.revertir_venta(db, venta)
+        db.flush()
+        inventario.descontar_por_venta(db, venta)
+
     db.commit()
     db.refresh(venta)
-
-    if config.SHEETS_SYNC_ENABLED:
-        venta_dict = _venta_a_dict_para_sheets(venta, productos_por_id)
-        background_tasks.add_task(sync_venta_to_sheets, venta_dict)
 
     return venta
 
 
-@router.post("/{venta_id}/cancelar", response_model=VentaOut)
+@router.post("/{venta_id}/cancelar", dependencies=[solo_admin], response_model=VentaOut)
 def cancelar_venta(
     venta_id: int,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Venta:
     venta = db.get(Venta, venta_id)
@@ -273,6 +258,7 @@ def cancelar_venta(
     if venta.estado == ESTADO_CANCELADA:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="La venta ya está cancelada")
 
+    estaba_activa = venta.estado == ESTADO_ACTIVA
     venta.estado = ESTADO_CANCELADA
 
     if venta.mesa_id is not None:
@@ -280,17 +266,11 @@ def cancelar_venta(
         if mesa is not None:
             mesa.estado = ESTADO_LIBRE
 
+    if estaba_activa:
+        inventario.revertir_venta(db, venta)
+
     db.commit()
     db.refresh(venta)
-
-    if config.SHEETS_SYNC_ENABLED:
-        producto_ids = {item.producto_id for item in venta.items}
-        productos_por_id = {
-            producto.id: producto
-            for producto in db.query(Producto).filter(Producto.id.in_(producto_ids)).all()
-        }
-        venta_dict = _venta_a_dict_para_sheets(venta, productos_por_id)
-        background_tasks.add_task(sync_venta_to_sheets, venta_dict)
 
     return venta
 
@@ -420,11 +400,10 @@ def quitar_item_venta(venta_id: int, item_id: int, db: Session = Depends(get_db)
 def cerrar_venta(
     venta_id: int,
     payload: VentaCerrar,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Venta:
     """Cierra/cobra un pedido abierto: pasa a 'activa', libera la mesa y
-    sincroniza a Sheets (primera sincronización de esta venta)."""
+    descuenta el inventario."""
     venta = db.get(Venta, venta_id)
     if venta is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Venta no encontrada")
@@ -436,27 +415,22 @@ def cerrar_venta(
         raise HTTPException(
             status.HTTP_409_CONFLICT, detail="No se puede cerrar un pedido sin productos"
         )
+    sesion = caja_service.exigir_sesion_abierta(db)
 
     venta.total = sum(item.precio_unitario * item.cantidad for item in venta.items)
     venta.metodo_pago = payload.metodo_pago.value
     venta.estado = ESTADO_ACTIVA
+    venta.caja_sesion_id = sesion.id
 
     if venta.mesa_id is not None:
         mesa = db.get(Mesa, venta.mesa_id)
         if mesa is not None:
             mesa.estado = ESTADO_LIBRE
 
+    inventario.descontar_por_venta(db, venta)
+
     db.commit()
     db.refresh(venta)
-
-    if config.SHEETS_SYNC_ENABLED:
-        producto_ids = {item.producto_id for item in venta.items}
-        productos_por_id = {
-            producto.id: producto
-            for producto in db.query(Producto).filter(Producto.id.in_(producto_ids)).all()
-        }
-        venta_dict = _venta_a_dict_para_sheets(venta, productos_por_id)
-        background_tasks.add_task(sync_venta_to_sheets, venta_dict)
 
     return venta
 
@@ -464,13 +438,12 @@ def cerrar_venta(
 @router.post("/{venta_id}/descartar", response_model=None)
 def descartar_venta(
     venta_id: int,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Venta | Response:
     """Descarta un pedido abierto sin cobrar y libera la mesa.
 
     - Si el pedido no tiene items: hard-delete (nunca fue una venta real, ni
-      se sincronizó a Sheets), responde `204 No Content` sin cuerpo.
+      se cobró), responde `204 No Content` sin cuerpo.
     - Si el pedido tiene items: se conserva como soft-delete
       (`estado: "cancelada"`, igual criterio que `POST /ventas/{id}/cancelar`
       de BE-020) para dejar rastro de auditoría, y responde `200` con la
@@ -494,19 +467,9 @@ def descartar_venta(
         db.commit()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    producto_ids = {item.producto_id for item in venta.items}
-    productos_por_id = {
-        producto.id: producto
-        for producto in db.query(Producto).filter(Producto.id.in_(producto_ids)).all()
-    }
-
     venta.estado = ESTADO_CANCELADA
 
     db.commit()
     db.refresh(venta)
-
-    if config.SHEETS_SYNC_ENABLED:
-        venta_dict = _venta_a_dict_para_sheets(venta, productos_por_id)
-        background_tasks.add_task(sync_venta_to_sheets, venta_dict)
 
     return VentaOut.model_validate(venta)

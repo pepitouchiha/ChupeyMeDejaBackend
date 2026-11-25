@@ -40,9 +40,9 @@ aceptable en paralelo.
   agregar un miembro adicional; `tarjeta` deja de ser un valor válido.
 - Sin Alembic ni sistema de migraciones en este proyecto (el schema se crea
   con `Base.metadata.create_all` en el lifespan de `app/main.py`, que **no**
-  altera una tabla ya existente en un `brainfreeze.db` previo). Documentar
+  altera una tabla ya existente en un `chupeymedeja.db` previo). Documentar
   en las notas de implementación que, para que el nuevo `CheckConstraint`
-  tome efecto en un entorno de desarrollo con `brainfreeze.db` ya creado,
+  tome efecto en un entorno de desarrollo con `chupeymedeja.db` ya creado,
   hay que borrar ese archivo local y dejar que se recree en el próximo
   arranque del servidor. No hay datos de producción ni seeds que usen
   `metodo_pago='tarjeta'` (verificado: `seed_productos.py` no crea ventas),
@@ -66,7 +66,7 @@ aceptable en paralelo.
 - [ ] `GET /ventas` sigue devolviendo correctamente ventas existentes con
       `metodo_pago: "efectivo"` (el otro valor no se tocó).
 - [ ] Documentado en las notas de implementación el paso manual de borrar
-      `brainfreeze.db` en desarrollo para que el `CheckConstraint`
+      `chupeymedeja.db` en desarrollo para que el `CheckConstraint`
       actualizado tome efecto (dado que no hay migraciones).
 
 ## Notas de implementación
@@ -91,11 +91,11 @@ aceptable en paralelo.
 **Paso manual requerido en desarrollo (documentado según pide la tarea):**
 El proyecto no usa Alembic; el schema se crea con `Base.metadata.create_all` en el lifespan
 de `app/main.py`, que no altera tablas ya existentes ni sus `CheckConstraint`. Para que el
-nuevo constraint tome efecto sobre un `brainfreeze.db` previo hay que borrar ese archivo y
+nuevo constraint tome efecto sobre un `chupeymedeja.db` previo hay que borrar ese archivo y
 dejar que se recree en el próximo arranque del servidor. **Esto ya se hizo como parte de
 esta tarea**: se detuvo el proceso `uvicorn --reload` que corría en esta sesión (puerto 8000,
 verificado con `netstat`/`taskkill` que no quedó ningún proceso python escuchando en ese
-puerto ni locks sobre el archivo) y se eliminó `backend/brainfreeze.db` (sin `-wal`/`-shm`
+puerto ni locks sobre el archivo) y se eliminó `backend/chupeymedeja.db` (sin `-wal`/`-shm`
 residuales). No se recreó el archivo ni se relanzó uvicorn — se recreará solo en el próximo
 arranque del servidor (a cargo de otro agente/usuario). No había seeds ni datos de
 producción que dependieran de `metodo_pago='tarjeta'` (`seed_productos.py` no crea ventas),
@@ -103,7 +103,7 @@ así que no se requería preservar filas de desarrollo existentes.
 
 **Cómo se probó:**
 Se validaron los 5 criterios de aceptación end-to-end levantando un uvicorn real en el
-puerto 8099 contra una SQLite temporal aislada (no la `brainfreeze.db` de desarrollo),
+puerto 8099 contra una SQLite temporal aislada (no la `chupeymedeja.db` de desarrollo),
 autenticado con JWT real de `POST /auth/login`:
 1. `POST /ventas` con `{"items":[{"producto_id":1,"cantidad":1}],"metodo_pago":"transferencia"}`
    → `201`, venta creada con `"metodo_pago":"transferencia"`.
@@ -113,7 +113,7 @@ autenticado con JWT real de `POST /auth/login`:
    (confirmado en la respuesta del punto 1, valor íntegro).
 4. `POST /ventas` con `"metodo_pago":"efectivo"` → `201`; `GET /ventas` devolvió ambas ventas
    (`efectivo` y `transferencia`) correctamente serializadas.
-5. Paso manual de borrado de `brainfreeze.db` documentado arriba y ejecutado como parte del
+5. Paso manual de borrado de `chupeymedeja.db` documentado arriba y ejecutado como parte del
    cierre de esta tarea (con el servidor de desarrollo detenido primero).
 
 La instancia de prueba en el puerto 8099 se detuvo y sus archivos temporales (`.db`, log) se
@@ -142,7 +142,7 @@ el código actual):
   'transferencia'"`); `POST /ventas` con `"efectivo"` sigue funcionando.
 - `grep -i tarjeta` sobre `backend/app` no devuelve residuos en código (solo
   aparece en el propio texto de las tareas `.md`, esperado).
-- El paso manual de borrar `brainfreeze.db` está documentado y, en la
+- El paso manual de borrar `chupeymedeja.db` está documentado y, en la
   práctica, el `CheckConstraint` nuevo ya está activo en la base de datos
   actual (confirmado al rechazar `"tarjeta"` con 422 en vivo).
 

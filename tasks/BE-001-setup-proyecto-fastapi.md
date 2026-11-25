@@ -19,7 +19,7 @@ a base de datos o configuración desde cero.
 
 Incluye:
 - Estructura de carpetas (routers/, models/, schemas/, db/ o equivalente razonable).
-- Conexión a SQLite (archivo local, ej. `brainfreeze.db`) vía SQLAlchemy (u otra
+- Conexión a SQLite (archivo local, ej. `chupeymedeja.db`) vía SQLAlchemy (u otra
   librería que justifiques en tus notas).
 - Creación de tablas a partir de los modelos (a nivel dev basta con
   `create_all` al arrancar; no hace falta Alembic todavía).
@@ -54,7 +54,7 @@ Todo el backend vive en `backend/`, con el paquete de la app en `backend/app/`:
 backend/
   requirements.txt        # dependencias fijadas (fastapi, uvicorn, sqlalchemy)
   .env.example             # variables de entorno soportadas (DATABASE_URL, CORS_ORIGINS)
-  .gitignore                # ignora .venv/, __pycache__, brainfreeze.db, .env
+  .gitignore                # ignora .venv/, __pycache__, chupeymedeja.db, .env
   app/
     main.py                 # crea la app FastAPI, registra CORS, create_all en startup, incluye routers
     core/
@@ -83,7 +83,7 @@ agregan en `app/routers/<recurso>.py` y se incluyen con
   facto con FastAPI y no requerir dependencias adicionales de config
   (se evitó `pydantic-settings` para no sumar una dependencia nueva; la
   configuración se lee directo de `os.getenv` en `app/core/config.py`).
-- **Conexión SQLite**: `sqlite:///<ruta absoluta a backend/brainfreeze.db>`
+- **Conexión SQLite**: `sqlite:///<ruta absoluta a backend/chupeymedeja.db>`
   por defecto (calculada desde `BASE_DIR` en `config.py`, no depende del
   directorio desde el que se lance `uvicorn`), configurable vía
   `DATABASE_URL`. Se usa `connect_args={"check_same_thread": False}` porque
@@ -126,7 +126,7 @@ GET http://127.0.0.1:8000/health
 
 Verificado en este entorno (Windows, Python 3.10.11, venv en
 `backend/.venv`): el server levanta sin errores, `GET /health` responde
-`200 {"status":"ok","database":"ok"}`, y `backend/brainfreeze.db` se crea
+`200 {"status":"ok","database":"ok"}`, y `backend/chupeymedeja.db` se crea
 automáticamente al iniciar (no existía antes de correr `uvicorn`). El
 archivo `.env.example` documenta las variables soportadas; si no hay `.env`,
 se usan los defaults (SQLite local + orígenes de Vite en 5173).
@@ -196,9 +196,9 @@ GET http://127.0.0.1:8123/health
 → 200 {"status":"ok","database":"ok"}
 ```
 
-`brainfreeze.db` se crea automáticamente al arrancar (verificado que no
+`chupeymedeja.db` se crea automáticamente al arrancar (verificado que no
 existía antes de correr el server). No quedó ningún `.env` de prueba ni
-`brainfreeze.db` en el repo tras la verificación.
+`chupeymedeja.db` en el repo tras la verificación.
 
 ## Revisión
 
@@ -206,7 +206,7 @@ existía antes de correr el server). No quedó ningún `.env` de prueba ni
 
 Verificado en este entorno (Windows, Python 3.10.11, venv `backend/.venv`):
 - `uvicorn app.main:app` levanta sin errores, `GET /health` responde
-  `200 {"status":"ok","database":"ok"}`, y `backend/brainfreeze.db` se crea
+  `200 {"status":"ok","database":"ok"}`, y `backend/chupeymedeja.db` se crea
   automáticamente al arrancar. ✅
 - CORS: el default (`http://localhost:5173,http://127.0.0.1:5173`) está
   correctamente aplicado vía `CORSMiddleware`. ✅
@@ -302,9 +302,9 @@ implementador) y reproduje ambos escenarios con el `.venv` ya existente en
 3. **Regresión end-to-end.** Levanté el server real
    (`uvicorn app.main:app --port 8129`): arrancó sin errores ni warnings en
    el log (`Application startup complete`), `GET /health` respondió
-   `200 {"status":"ok","database":"ok"}`, y `backend/brainfreeze.db` se creó
+   `200 {"status":"ok","database":"ok"}`, y `backend/chupeymedeja.db` se creó
    automáticamente (no existía antes de arrancar). Detuve el proceso y
-   eliminé el `.env` de prueba, `brainfreeze.db` y el log generado; el
+   eliminé el `.env` de prueba, `chupeymedeja.db` y el log generado; el
    repo queda limpio, sin residuos de esta verificación.
 
 Con ambos hallazgos de la revisión anterior corregidos y verificados en

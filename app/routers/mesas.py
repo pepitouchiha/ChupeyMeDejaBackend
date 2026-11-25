@@ -4,13 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.security import require_auth
+from app.core.security import require_sede, solo_admin
 from app.db.session import get_db
 from app.models.mesa import ESTADO_LIBRE, Mesa
 from app.models.venta import ESTADO_ABIERTA, Venta
 from app.schemas.mesa import MesaCreate, MesaOut, MesaUpdate
 
-router = APIRouter(prefix="/mesas", tags=["mesas"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/mesas", tags=["mesas"], dependencies=[Depends(require_sede)])
 
 
 def _contar_ventas(db: Session, mesa_id: int) -> int:
@@ -31,7 +31,7 @@ def listar_mesas(db: Session = Depends(get_db)) -> list[Mesa]:
     return db.query(Mesa).order_by(Mesa.nombre_o_numero).all()
 
 
-@router.post("", response_model=MesaOut, status_code=status.HTTP_201_CREATED)
+@router.post("", dependencies=[solo_admin], response_model=MesaOut, status_code=status.HTTP_201_CREATED)
 def crear_mesa(payload: MesaCreate, db: Session = Depends(get_db)) -> Mesa:
     mesa = Mesa(nombre_o_numero=payload.nombre_o_numero, estado=ESTADO_LIBRE)
     db.add(mesa)
@@ -40,8 +40,8 @@ def crear_mesa(payload: MesaCreate, db: Session = Depends(get_db)) -> Mesa:
     return mesa
 
 
-@router.put("/{mesa_id}", response_model=MesaOut)
-@router.patch("/{mesa_id}", response_model=MesaOut)
+@router.put("/{mesa_id}", dependencies=[solo_admin], response_model=MesaOut)
+@router.patch("/{mesa_id}", dependencies=[solo_admin], response_model=MesaOut)
 def actualizar_mesa(mesa_id: int, payload: MesaUpdate, db: Session = Depends(get_db)) -> Mesa:
     mesa = db.get(Mesa, mesa_id)
     if mesa is None:
@@ -73,7 +73,7 @@ def liberar_mesa(mesa_id: int, db: Session = Depends(get_db)) -> Mesa:
     return mesa
 
 
-@router.delete("/{mesa_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete("/{mesa_id}", dependencies=[solo_admin], status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def eliminar_mesa(mesa_id: int, db: Session = Depends(get_db)) -> None:
     mesa = db.get(Mesa, mesa_id)
     if mesa is None:

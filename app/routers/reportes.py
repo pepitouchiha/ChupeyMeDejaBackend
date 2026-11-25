@@ -6,13 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-from app.core.security import require_auth
+from app.core.security import require_sede, solo_admin
 from app.core.timezone import (
-    columna_creado_en_local,
+    anio_local,
+    dia_local,
     fin_dia_local_a_utc_naive,
     hoy_local,
     inicio_dia_local_a_utc_naive,
     limites_dia_local,
+    mes_local,
     utc_naive_a_local,
 )
 from app.db.session import get_db
@@ -24,9 +26,14 @@ from app.models.venta import (
     Venta,
     VentaItem,
 )
+from app.models.gasto import CategoriaGasto, Gasto
+from app.models.insumo import Insumo
 from app.routers.insumos import listar_insumos
 from app.schemas.insumo import InsumoOut
 from app.schemas.reporte import (
+    ContabilidadPorDia,
+    InvertidoPorCategoria,
+    ReporteContabilidadOut,
     ReporteHoyOut,
     ReporteMensualOut,
     VentaPorDia,
@@ -34,7 +41,7 @@ from app.schemas.reporte import (
     VentaPorMes,
 )
 
-router = APIRouter(prefix="/reportes", tags=["reportes"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/reportes", tags=["reportes"], dependencies=[Depends(require_sede)])
 
 # Nota (BE-018): el margen se calcula con el costo ACTUAL de cada producto
 # (Producto.costo en el momento de generar el reporte), no un costo histórico
@@ -81,12 +88,11 @@ def _calcular_margen(db: Session, desde: datetime, hasta: datetime | None = None
 
 
 def _margen_por_mes(db: Session, desde: datetime) -> dict[tuple[int, int], tuple[int, bool]]:
-    creado_en_local = columna_creado_en_local(Venta.creado_en)
     filas = (
         _margen_query(db)
         .add_columns(
-            func.strftime("%Y", creado_en_local).label("anio"),
-            func.strftime("%m", creado_en_local).label("mes"),
+            anio_local(Venta.creado_en).label("anio"),
+            mes_local(Venta.creado_en).label("mes"),
         )
         .filter(Venta.creado_en >= desde)
         .group_by("anio", "mes")
@@ -144,7 +150,7 @@ def reporte_hoy(db: Session = Depends(get_db)) -> ReporteHoyOut:
     )
 
 
-@router.get("/mensual", response_model=ReporteMensualOut)
+@router.get("/mensual", dependencies=[solo_admin], response_model=ReporteMensualOut)
 def reporte_mensual(
     meses: int = Query(default=12, ge=1, le=60),
     db: Session = Depends(get_db),
@@ -154,11 +160,10 @@ def reporte_mensual(
     anio_min = meses_solicitados[0][0]
     inicio_anio_min = inicio_dia_local_a_utc_naive(date(anio_min, 1, 1))
 
-    creado_en_local = columna_creado_en_local(Venta.creado_en)
     filas = (
         db.query(
-            func.strftime("%Y", creado_en_local).label("anio"),
-            func.strftime("%m", creado_en_local).label("mes"),
+            anio_local(Venta.creado_en).label("anio"),
+            mes_local(Venta.creado_en).label("mes"),
             func.sum(Venta.total).label("total"),
             func.count(Venta.id).label("num_ventas"),
         )
@@ -207,7 +212,7 @@ def reporte_mensual(
 DIAS_HISTORIAL_POR_DEFECTO = 30
 
 
-@router.get("/diario", response_model=list[VentaPorDia])
+@router.get("/diario", dependencies=[solo_admin], response_model=list[VentaPorDia])
 def reporte_diario(
     desde: date | None = None,
     hasta: date | None = None,
@@ -225,10 +230,10 @@ def reporte_diario(
     inicio = inicio_dia_local_a_utc_naive(desde)
     fin = fin_dia_local_a_utc_naive(hasta)
 
-    dia_local = func.date(columna_creado_en_local(Venta.creado_en))
+    dia_expr = dia_local(Venta.creado_en)
     filas = (
         db.query(
-            dia_local.label("dia"),
+            dia_expr.label("dia"),
             func.sum(Venta.total).label("total"),
             func.count(Venta.id).label("num_ventas"),
             func.sum(case((Venta.metodo_pago == METODO_EFECTIVO, Venta.total), else_=0)).label(
@@ -242,13 +247,13 @@ def reporte_diario(
         .filter(Venta.creado_en <= fin)
         .filter(Venta.estado == ESTADO_ACTIVA)
         .group_by("dia")
-        .order_by(dia_local.desc())
+        .order_by(dia_expr.desc())
         .all()
     )
 
     filas_margen = (
         _margen_query(db)
-        .add_columns(dia_local.label("dia"))
+        .add_columns(dia_expr.label("dia"))
         .filter(Venta.creado_en >= inicio)
         .filter(Venta.creado_en <= fin)
         .group_by("dia")
@@ -278,3 +283,120 @@ def reporte_diario(
 @router.get("/alertas-stock", response_model=list[InsumoOut])
 def reporte_alertas_stock(db: Session = Depends(get_db)) -> list[InsumoOut]:
     return listar_insumos(solo_alertas=True, db=db)
+
+
+@router.get("/contabilidad", dependencies=[solo_admin], response_model=ReporteContabilidadOut)
+def reporte_contabilidad(
+    desde: date | None = None,
+    hasta: date | None = None,
+    db: Session = Depends(get_db),
+) -> ReporteContabilidadOut:
+    """Ventas, invertido y ganancia neta de un rango de fechas locales
+    (por defecto, el mes local actual).
+
+    La ganancia neta es **base caja**: ventas activas del periodo menos todos
+    los gastos (`gastos.fecha`) del periodo, incluidas compras de inventario y
+    nómina. Una compra grande de vasos baja la ganancia del día en que se
+    compró, aunque los vasos se usen después. `margen_productos` (precio -
+    costo actual de producto) se entrega solo como referencia informativa.
+    """
+    hoy = hoy_local()
+    desde = desde or hoy.replace(day=1)
+    hasta = hasta or hoy
+    if desde > hasta:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="'desde' no puede ser posterior a 'hasta'"
+        )
+    inicio = inicio_dia_local_a_utc_naive(desde)
+    fin = fin_dia_local_a_utc_naive(hasta)
+
+    dia_expr = dia_local(Venta.creado_en)
+    filas_ventas = (
+        db.query(
+            dia_expr.label("dia"),
+            func.sum(Venta.total).label("total"),
+            func.count(Venta.id).label("num_ventas"),
+            func.sum(case((Venta.metodo_pago == METODO_EFECTIVO, Venta.total), else_=0)).label(
+                "efectivo"
+            ),
+            func.sum(case((Venta.metodo_pago == METODO_TRANSFERENCIA, Venta.total), else_=0)).label(
+                "transferencia"
+            ),
+        )
+        .filter(Venta.creado_en >= inicio, Venta.creado_en <= fin)
+        .filter(Venta.estado == ESTADO_ACTIVA)
+        .group_by("dia")
+        .all()
+    )
+    ventas_por_dia = {fila.dia: int(fila.total or 0) for fila in filas_ventas}
+
+    filas_gastos = (
+        db.query(Gasto.fecha, Gasto.categoria, func.sum(Gasto.monto))
+        .filter(Gasto.fecha >= desde, Gasto.fecha <= hasta)
+        .group_by(Gasto.fecha, Gasto.categoria)
+        .all()
+    )
+    invertido_por_dia: dict[str, int] = {}
+    invertido_cat: dict[str, int] = {}
+    for fecha, categoria, monto in filas_gastos:
+        invertido_por_dia[fecha.isoformat()] = invertido_por_dia.get(fecha.isoformat(), 0) + int(monto or 0)
+        invertido_cat[categoria] = invertido_cat.get(categoria, 0) + int(monto or 0)
+
+    fila_margen = (
+        _margen_query(db).filter(Venta.creado_en >= inicio, Venta.creado_en <= fin).one()
+    )
+
+    valor_inventario = sum(
+        i.stock * i.costo_unitario
+        for i in db.query(Insumo)
+        .filter(Insumo.activo.is_(True), Insumo.stock > 0, Insumo.costo_unitario.isnot(None))
+        .all()
+    )
+
+    por_dia: list[ContabilidadPorDia] = []
+    dia = desde
+    while dia <= hasta:
+        clave = dia.isoformat()
+        ventas = ventas_por_dia.get(clave, 0)
+        invertido = invertido_por_dia.get(clave, 0)
+        por_dia.append(
+            ContabilidadPorDia(
+                fecha=dia, ventas=ventas, invertido=invertido, ganancia_neta=ventas - invertido
+            )
+        )
+        dia += timedelta(days=1)
+
+    ventas_total = sum(ventas_por_dia.values())
+    invertido_total = sum(invertido_cat.values())
+
+    # Todas las categorías activas (aunque estén en 0) más cualquier otra que
+    # tenga gastos en el periodo (desactivadas o claves sin categoría).
+    categorias = db.query(CategoriaGasto).order_by(CategoriaGasto.orden, CategoriaGasto.id).all()
+    invertido_por_categoria = [
+        InvertidoPorCategoria(
+            categoria=c.clave, etiqueta=c.nombre, total=invertido_cat.get(c.clave, 0)
+        )
+        for c in categorias
+        if c.activa or invertido_cat.get(c.clave, 0) > 0
+    ]
+    claves_conocidas = {c.clave for c in categorias}
+    invertido_por_categoria += [
+        InvertidoPorCategoria(categoria=clave, etiqueta=clave, total=total)
+        for clave, total in invertido_cat.items()
+        if clave not in claves_conocidas
+    ]
+    return ReporteContabilidadOut(
+        desde=desde,
+        hasta=hasta,
+        ventas_total=ventas_total,
+        ventas_efectivo=sum(int(f.efectivo or 0) for f in filas_ventas),
+        ventas_transferencia=sum(int(f.transferencia or 0) for f in filas_ventas),
+        num_ventas=sum(int(f.num_ventas) for f in filas_ventas),
+        invertido_total=invertido_total,
+        invertido_por_categoria=invertido_por_categoria,
+        ganancia_neta=ventas_total - invertido_total,
+        margen_productos=int(fila_margen.margen or 0),
+        margen_incompleto=(fila_margen.items_sin_costo or 0) > 0,
+        valor_inventario_actual=int(round(valor_inventario)),
+        por_dia=por_dia,
+    )

@@ -13,9 +13,9 @@ created_by: planner
 Extender el backup de mejor esfuerzo a Google Sheets (BE-012/013/014) para cubrir
 **Insumos**, el catálogo con mayor riesgo si se pierde (niveles de stock cambian
 seguido y, a diferencia de productos/categorías, no son reconstruibles
-retroactivamente de memoria si se pierde `brainfreeze.db`). Igual que en BE-014/
+retroactivamente de memoria si se pierde `chupeymedeja.db`). Igual que en BE-014/
 BE-015, cada insumo queda representado por **una sola fila** en la hoja `Insumos`
-del spreadsheet `BrainFreeze POS`, actualizada in place. A diferencia de productos y
+del spreadsheet `Chupe y Me Deja POS`, actualizada in place. A diferencia de productos y
 categorías, insumos tiene **tres** endpoints que deben disparar el sync: crear,
 actualizar (`PUT`/`PATCH`) y `POST /insumos/{id}/ajustar-stock` — este último es el
 que más importa cubrir, porque es el mecanismo principal por el que cambia el
@@ -69,7 +69,7 @@ stock día a día.
   existente para ventas; si esto genera demasiadas llamadas a la API de Sheets en
   escenarios de uso intensivo, es una optimización de una tarea de seguimiento
   futura, no de esta.
-- Migrar/backfill retroactivo de insumos ya existentes en `brainfreeze.db`.
+- Migrar/backfill retroactivo de insumos ya existentes en `chupeymedeja.db`.
 - Crear la hoja `Insumos` en el spreadsheet real — la crea el usuario a mano.
 - Cualquier cambio a `_upsert_row_by_id`/`_get_worksheet`/`_ensure_headers` más
   allá de usarlos (misma nota que BE-015: si la infraestructura de BE-014 no
@@ -244,7 +244,7 @@ ad-hoc en el scratchpad de la sesión, más pruebas contra el servidor real):
    `credentials.json`/`authorized_user.json` reales ya presentes desde
    BE-012/014/015 — prueba end-to-end real contra
    `gspread.oauth`/`client.open` reales, no solo mocks). Usuario de prueba
-   `test-be016@brainfreeze.com` creado vía `crear_usuario.py`:
+   `test-be016@chupeymedeja.com` creado vía `crear_usuario.py`:
    - `POST /insumos` (categoría existente `id=5`) → `201`, `estado: "OK"`.
    - `PATCH /insumos/{id}` (`stock_minimo`) → `200`, `estado` sigue `"OK"`.
    - `POST /insumos/{id}/ajustar-stock` con `+5` → `200`, `stock` reflejado.
@@ -254,7 +254,7 @@ ad-hoc en el scratchpad de la sesión, más pruebas contra el servidor real):
    - `POST /insumos/{id}/ajustar-stock` con `-999` → `400 Bad Request`
      (`"El ajuste dejaría el stock en -994.0, no puede ser negativo"`).
    - En los logs del servidor aparecieron exactamente **4** líneas
-     `No se encontró la hoja 'Insumos' dentro del spreadsheet 'BrainFreeze
+     `No se encontró la hoja 'Insumos' dentro del spreadsheet 'Chupe y Me Deja
      POS'.` — una por cada una de las 4 mutaciones exitosas (crear, PATCH,
      ajuste +5, ajuste -10) y **ninguna** para el ajuste que devolvió
      `400` — confirma en vivo, contando las llamadas reales a
@@ -262,15 +262,15 @@ ad-hoc en el scratchpad de la sesión, más pruebas contra el servidor real):
      tarea se cumple: la mutación que falla con `400` no encola ningún
      sync.
    - Se limpió el insumo de prueba con `DELETE /insumos/2` → `204`.
-   - El usuario de prueba `test-be016@brainfreeze.com` se dejó en
-     `brainfreeze.db` (mismo criterio que los usuarios de prueba de
+   - El usuario de prueba `test-be016@chupeymedeja.com` se dejó en
+     `chupeymedeja.db` (mismo criterio que los usuarios de prueba de
      tareas anteriores).
 
 **Pendiente explícito**: igual que en BE-014/015 con `Categorias`/
 `Productos`, la prueba end-to-end contra el Google Sheet real del usuario
 confirmó que la infraestructura de autenticación/spreadsheet funciona
 correctamente, pero **la hoja `Insumos` todavía no existe** en el
-spreadsheet `BrainFreeze POS` del usuario — falta que la cree manualmente
+spreadsheet `Chupe y Me Deja POS` del usuario — falta que la cree manualmente
 (mismo nombre que `SHEETS_WORKSHEET_INSUMOS`, default `"Insumos"`) para
 que la sincronización de insumos escriba filas reales; hasta entonces,
 cada creación/actualización/ajuste de stock loguea el `warning` de

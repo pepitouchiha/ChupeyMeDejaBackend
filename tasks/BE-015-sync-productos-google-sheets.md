@@ -15,7 +15,7 @@ el catálogo de **Productos**, reutilizando la infraestructura genérica que dej
 BE-014 (`_get_worksheet(worksheet_name)`, `_ensure_headers(worksheet, headers)`,
 `_upsert_row_by_id(worksheet, headers, entity_id, row_values)`). Cada producto debe
 quedar representado por **una sola fila** en la hoja `Productos` del spreadsheet
-`BrainFreeze POS`, que se actualiza in place cuando el producto cambia (precio,
+`Chupe y Me Deja POS`, que se actualiza in place cuando el producto cambia (precio,
 estado, sabor, tamaño, categoría) en vez de acumular una fila nueva por cada
 edición — igual filosofía que categorías en BE-014, distinta de ventas (que sigue
 siendo un log append-only).
@@ -66,7 +66,7 @@ siendo un log append-only).
 **No incluye (fuera de alcance):**
 - Sincronizar la eliminación de productos (ver arriba).
 - Incluir `imagen_base64` en la hoja, de ninguna forma (ver punto 1).
-- Migrar/backfill retroactivo de productos ya existentes en `brainfreeze.db`.
+- Migrar/backfill retroactivo de productos ya existentes en `chupeymedeja.db`.
 - Crear la hoja `Productos` en el spreadsheet real — la crea el usuario a mano
   siguiendo la documentación (ya generalizada en BE-014, esta tarea solo agrega
   la mención específica de `Productos` si falta).
@@ -235,12 +235,12 @@ en el scratchpad de la sesión, más pruebas contra el servidor real):
    `credentials.json`/`authorized_user.json` reales ya presentes desde
    BE-012/014 — permitió una prueba end-to-end real contra
    `gspread.oauth`/`client.open` reales, no solo mocks). Usuario de prueba
-   `test-be015@brainfreeze.com` creado vía `crear_usuario.py`:
+   `test-be015@chupeymedeja.com` creado vía `crear_usuario.py`:
    - `POST /productos` con `imagen_base64` no vacío, `categoria_id=5` →
      `201` normal con la imagen presente en la respuesta al cliente (como
      corresponde, la exclusión es solo hacia Sheets), y en el log del
      servidor apareció exactamente `No se encontró la hoja 'Productos'
-     dentro del spreadsheet 'BrainFreeze POS'.` — confirma que la
+     dentro del spreadsheet 'Chupe y Me Deja POS'.` — confirma que la
      autenticación y apertura del spreadsheet real funcionan, pero la hoja
      `Productos` **todavía no existe** en el spreadsheet del usuario (a
      diferencia de `Categorias`, que según las notas de BE-014 tampoco
@@ -251,14 +251,14 @@ en el scratchpad de la sesión, más pruebas contra el servidor real):
      `WorksheetNotFound` para `Productos` — confirma que ni crear ni
      actualizar rompen nada aunque la hoja destino no exista todavía.
    - Se limpió el producto de prueba con `DELETE /productos/16` → `204`.
-   - El usuario de prueba `test-be015@brainfreeze.com` se dejó en
-     `brainfreeze.db` (mismo criterio que los usuarios de prueba de
+   - El usuario de prueba `test-be015@chupeymedeja.com` se dejó en
+     `chupeymedeja.db` (mismo criterio que los usuarios de prueba de
      tareas anteriores).
 
 **Pendiente explícito**: igual que en BE-014 con la hoja `Categorias`, la
 prueba end-to-end contra el Google Sheet real del usuario confirmó que la
 infraestructura de autenticación/spreadsheet funciona correctamente, pero
-**la hoja `Productos` todavía no existe** en el spreadsheet `BrainFreeze
+**la hoja `Productos` todavía no existe** en el spreadsheet `Chupe y Me Deja
 POS` del usuario — falta que la cree manualmente (mismo nombre que
 `SHEETS_WORKSHEET_PRODUCTOS`, default `"Productos"`) para que la
 sincronización de productos escriba filas reales; hasta entonces, cada

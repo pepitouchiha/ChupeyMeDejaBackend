@@ -1,0 +1,25 @@
+# Blueprint de Render para el backend de Chupe y Me Deja.
+# En Render: New > Blueprint > conectar este repositorio.
+# Las variables marcadas con sync: false se piden al crear el servicio.
+services:
+  - type: web
+    name: chupeymedeja-api
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: ENVIRONMENT
+        value: production
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_EXPIRE_MINUTES
+        value: "720"
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

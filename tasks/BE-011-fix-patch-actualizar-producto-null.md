@@ -131,7 +131,7 @@ fuera del propio `.venv`), para evitar que este mismo problema de reload
 "fantasma" vuelva a ocurrir en tareas futuras.
 
 **Cómo se probó** (con el servidor arriba, autenticando con el usuario
-`admin@brainfreeze.com` existente en `brainfreeze.db` vía un JWT generado
+`admin@chupeymedeja.com` existente en `chupeymedeja.db` vía un JWT generado
 directamente con `create_access_token` — no se conocía la contraseña en
 texto plano de ese usuario para pasar por `/auth/login`):
 
@@ -158,7 +158,7 @@ texto plano de ese usuario para pasar por `/auth/login`):
    actualizándose igual que antes con el patrón `is not None`.
 9. Datos de prueba (producto y categoría creados para esta verificación)
    eliminados al final (`DELETE /productos/1`, `DELETE /categorias/3`,
-   ambos `204`) para no dejar residuos en `brainfreeze.db`.
+   ambos `204`) para no dejar residuos en `chupeymedeja.db`.
 
 Ejemplo de payload para reproducir manualmente el caso principal:
 

@@ -10,54 +10,60 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
-# Zona horaria de negocio (BE-024): un solo local, en Colombia, sin horario de
-# verano, por lo que el offset es fijo (UTC-5). Todo lo que necesite
-# interpretar "hoy"/rangos de fecha en hora local del negocio (reportes,
-# filtros de ventas) debe usar esta constante en vez de asumir la hora local
-# del servidor. `Venta.creado_en` sigue guardándose en UTC naive; esta
-# constante solo se usa para convertir en la capa de consulta/presentación.
-BUSINESS_TIMEZONE = ZoneInfo("America/Bogota")
+# "development" (por defecto) o "production". En producción se exigen
+# DATABASE_URL y un JWT_SECRET_KEY propio, y se ocultan /docs.
+ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").strip().lower()
+ES_PRODUCCION = ENVIRONMENT == "production"
 
-def _resolver_ruta(valor: str) -> Path:
-    """Resuelve rutas relativas del `.env` contra `backend/`, no contra el
-    directorio de trabajo: si el backend se lanza desde otra carpeta (acceso
-    directo, tarea programada), `./brainfreeze.db` apuntaría a una base vacía."""
-    ruta = Path(valor)
-    return ruta if ruta.is_absolute() else (BASE_DIR / ruta).resolve()
+# Zona horaria del negocio: ambas sedes están en Colombia (UTC-5, sin horario
+# de verano). Las fechas se guardan en UTC naive y se convierten con esto al
+# calcular "hoy" y agrupar reportes.
+BUSINESS_TIMEZONE_NAME = os.getenv("BUSINESS_TIMEZONE", "America/Bogota")
+BUSINESS_TIMEZONE = ZoneInfo(BUSINESS_TIMEZONE_NAME)
 
 
 def _resolver_database_url(url: str) -> str:
-    prefijo = "sqlite:///"
-    if not url.startswith(prefijo) or url == f"{prefijo}:memory:":
-        return url
-    return f"{prefijo}{_resolver_ruta(url[len(prefijo):]).as_posix()}"
+    """Normaliza la URL de la base de datos.
+
+    - SQLite relativo (desarrollo local) se resuelve contra `backend/`.
+    - `postgres://` / `postgresql://` (lo que entrega Supabase) se convierte a
+      `postgresql+psycopg://` para usar el driver psycopg 3.
+    """
+    if url.startswith("sqlite:///") and url != "sqlite:///:memory:":
+        ruta = Path(url[len("sqlite:///"):])
+        if not ruta.is_absolute():
+            ruta = (BASE_DIR / ruta).resolve()
+        return f"sqlite:///{ruta.as_posix()}"
+    for prefijo in ("postgres://", "postgresql://"):
+        if url.startswith(prefijo):
+            return "postgresql+psycopg://" + url[len(prefijo):]
+    return url
 
 
+_database_url_env = os.getenv("DATABASE_URL", "").strip()
+if ES_PRODUCCION and not _database_url_env:
+    raise RuntimeError("DATABASE_URL es obligatoria en producción (cadena de conexión de Supabase).")
 DATABASE_URL: str = _resolver_database_url(
-    os.getenv("DATABASE_URL", f"sqlite:///{(BASE_DIR / 'brainfreeze.db').as_posix()}")
+    _database_url_env or f"sqlite:///{(BASE_DIR / 'chupeymedeja.db').as_posix()}"
 )
 
 CORS_ORIGINS: list[str] = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in os.getenv(
         "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
     ).split(",")
     if origin.strip()
 ]
 
-JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
+_SECRETO_DESARROLLO = "dev-secret-change-me"
+JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", _SECRETO_DESARROLLO)
+if ES_PRODUCCION and (JWT_SECRET_KEY == _SECRETO_DESARROLLO or len(JWT_SECRET_KEY) < 32):
+    raise RuntimeError(
+        "JWT_SECRET_KEY debe ser un secreto propio de al menos 32 caracteres en producción."
+    )
 JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "480"))
+JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "720"))
 
-SHEETS_SYNC_ENABLED: bool = os.getenv("SHEETS_SYNC_ENABLED", "false").strip().lower() == "true"
-SHEETS_SPREADSHEET_NAME: str = os.getenv("SHEETS_SPREADSHEET_NAME", "BrainFreeze POS")
-SHEETS_WORKSHEET_NAME: str = os.getenv("SHEETS_WORKSHEET_NAME", "Ventas_Diarias")
-SHEETS_WORKSHEET_CATEGORIAS: str = os.getenv("SHEETS_WORKSHEET_CATEGORIAS", "Categorias")
-SHEETS_WORKSHEET_PRODUCTOS: str = os.getenv("SHEETS_WORKSHEET_PRODUCTOS", "Productos")
-SHEETS_WORKSHEET_INSUMOS: str = os.getenv("SHEETS_WORKSHEET_INSUMOS", "Insumos")
-SHEETS_CREDENTIALS_FILE: Path = _resolver_ruta(
-    os.getenv("SHEETS_CREDENTIALS_FILE", str(BASE_DIR / "credentials.json"))
-)
-SHEETS_AUTHORIZED_USER_FILE: Path = _resolver_ruta(
-    os.getenv("SHEETS_AUTHORIZED_USER_FILE", str(BASE_DIR / "authorized_user.json"))
-)
+# Intentos de login fallidos permitidos por IP + email antes de bloquear un rato.
+LOGIN_MAX_INTENTOS: int = int(os.getenv("LOGIN_MAX_INTENTOS", "5"))
+LOGIN_BLOQUEO_MINUTOS: int = int(os.getenv("LOGIN_BLOQUEO_MINUTOS", "15"))

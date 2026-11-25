@@ -4,12 +4,13 @@ from sqlalchemy import CheckConstraint, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.models.sede import SedeScoped
 
 ESTADO_LIBRE = "libre"
 ESTADO_OCUPADA = "ocupada"
 
 
-class Mesa(Base):
+class Mesa(SedeScoped, Base):
     __tablename__ = "mesas"
     __table_args__ = (
         CheckConstraint(f"estado IN ('{ESTADO_LIBRE}', '{ESTADO_OCUPADA}')", name="ck_mesas_estado"),

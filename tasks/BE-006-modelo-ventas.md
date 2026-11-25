@@ -126,11 +126,11 @@ mesa como campo opcional (ver BE-005 — venta libre si no se especifica mesa).
 
 ```
 cd backend
-./.venv/Scripts/python.exe -m app.scripts.crear_usuario admin@brainfreeze.com "Password123"
+./.venv/Scripts/python.exe -m app.scripts.crear_usuario admin@chupeymedeja.com "Password123"
 ./.venv/Scripts/python.exe -m uvicorn app.main:app --reload
 ```
 
-1. `POST /auth/login` con `{"email": "admin@brainfreeze.com", "password": "Password123"}` -> `access_token`.
+1. `POST /auth/login` con `{"email": "admin@chupeymedeja.com", "password": "Password123"}` -> `access_token`.
 2. Crear categoría, productos y (opcional) una mesa vía sus endpoints existentes.
 3. `POST /ventas` con Authorization Bearer:
    ```json
@@ -161,7 +161,7 @@ casos 404, 422 de `metodo_pago`/`items` vacíos, 401 sin token, y el 409 de
 **Veredicto: `done`**
 
 Verificado end-to-end levantando el backend real (`uvicorn`, SQLite temporal
-`brainfreeze_review_test.db`, borrada al terminar) y probando con `curl`
+`chupeymedeja_review_test.db`, borrada al terminar) y probando con `curl`
 autenticado (JWT real de `POST /auth/login`) los flujos completos, sin
 confiar únicamente en las notas del implementador:
 

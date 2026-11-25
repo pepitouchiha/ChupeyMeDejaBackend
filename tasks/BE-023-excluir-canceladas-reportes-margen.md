@@ -162,7 +162,7 @@ numéricos concretos, no solo por lectura de código:
 Servidor y base de datos temporal detenidos/eliminados al finalizar toda la
 verificación de las 4 tareas (BE-020 a BE-023); no se dejó ningún proceso
 `uvicorn` corriendo ni artefactos fuera del scratchpad de la sesión, y la
-`brainfreeze.db` real del repo no fue tocada en ningún momento (confirmado
+`chupeymedeja.db` real del repo no fue tocada en ningún momento (confirmado
 con `git status`, sin cambios fuera de los archivos de código/tareas
 listados arriba).
 

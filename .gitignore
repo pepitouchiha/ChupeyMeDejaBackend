@@ -2,8 +2,10 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-brainfreeze.db
+chupeymedeja.db
 .env
 credentials.json
 authorized_user.json
 logs/
+*.db
+.pytest_cache/

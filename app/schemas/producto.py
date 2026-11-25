@@ -91,6 +91,20 @@ class ProductoUpdate(BaseModel):
         return _validar_imagen_base64(v)
 
 
+class ProductoInsumoIn(BaseModel):
+    insumo_id: int
+    cantidad: float = Field(gt=0)
+
+
+class ProductoInsumoOut(BaseModel):
+    insumo_id: int
+    nombre: str
+    unidad: str
+    cantidad: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProductoOut(BaseModel):
     id: int
     nombre: str
@@ -102,5 +116,6 @@ class ProductoOut(BaseModel):
     tamano: str | None
     imagen_base64: str | None
     creado_en: datetime
+    insumos: list[ProductoInsumoOut] = []
 
     model_config = ConfigDict(from_attributes=True)

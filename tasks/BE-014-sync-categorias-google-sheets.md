@@ -121,7 +121,7 @@ BE-016 (insumos).
   no crea hojas, solo las busca; si no existe, se loguea `WorksheetNotFound` y no se
   sincroniza esa entidad. Documentar esto en el README igual que ya se documenta
   para `Ventas_Diarias`).
-- Migrar/backfill retroactivo de categorías ya existentes en `brainfreeze.db` antes
+- Migrar/backfill retroactivo de categorías ya existentes en `chupeymedeja.db` antes
   de esta tarea — solo se sincronizan creaciones/actualizaciones que ocurran a
   partir de que esta tarea esté desplegada y el flag activado.
 - Reintentos automáticos o cola persistente si Sheets falla (igual que BE-012: se
@@ -178,7 +178,7 @@ BE-016 (insumos).
       (`SHEETS_WORKSHEET_CATEGORIAS=Categorias`, `SHEETS_WORKSHEET_PRODUCTOS=Productos`,
       `SHEETS_WORKSHEET_INSUMOS=Insumos`) sin comentar.
 - [ ] `backend/README.md` documenta que además de `Ventas_Diarias`, el
-      spreadsheet `BrainFreeze POS` debe tener una hoja `Categorias` (y menciona
+      spreadsheet `Chupe y Me Deja POS` debe tener una hoja `Categorias` (y menciona
       que `Productos`/`Insumos` vendrán en tareas posteriores) para que la
       sincronización de categorías funcione, y agrega las 3 filas nuevas a la
       tabla de variables de entorno.
@@ -317,7 +317,7 @@ servidor real):
    `sync_categoria_to_sheets`/`_get_worksheet` — confirma que con el flag en
    `False` no se evalúa la rama ni se toca `gspread`.
 6. **Contra el servidor real, en background** (`uvicorn`, puerto 8000,
-   usuario de prueba `test-be014@brainfreeze.com` creado vía
+   usuario de prueba `test-be014@chupeymedeja.com` creado vía
    `crear_usuario.py`, siguiendo el mismo patrón que BE-012/BE-013):
    - `.env` real del proyecto ya tenía `SHEETS_SYNC_ENABLED=true` **y**
      `credentials.json`/`authorized_user.json` reales presentes en disco
@@ -326,7 +326,7 @@ servidor real):
      reales, no solo mocks.
    - `POST /categorias` con `{"nombre":"BE014-Test","color":"#abcdef"}` →
      `201` normal, y en el log del servidor apareció exactamente `No se
-     encontró la hoja 'Categorias' dentro del spreadsheet 'BrainFreeze
+     encontró la hoja 'Categorias' dentro del spreadsheet 'Chupe y Me Deja
      POS'.` — confirma que el spreadsheet real sí abre correctamente
      (autenticación y `client.open` funcionan) pero la hoja `Categorias`
      **todavía no existe** en el spreadsheet del usuario (a diferencia de
@@ -338,15 +338,15 @@ servidor real):
      (no afecta Sheets, ya que la hoja `Categorias` no existe aún; si
      existiera, por diseño de esta tarea la fila quedaría huérfana, ver
      "No incluye").
-   - El usuario de prueba `test-be014@brainfreeze.com` se dejó en
-     `brainfreeze.db` (mismo criterio que `test-be012@brainfreeze.com`, que
+   - El usuario de prueba `test-be014@chupeymedeja.com` se dejó en
+     `chupeymedeja.db` (mismo criterio que `test-be012@chupeymedeja.com`, que
      también sigue presente — no hay script de borrado de usuarios en el
      proyecto).
 
 **Pendiente explícito**: la prueba end-to-end contra el Google Sheet real
 del usuario confirmó que la infraestructura de autenticación/spreadsheet
 funciona correctamente, pero **la hoja `Categorias` todavía no existe** en
-el spreadsheet `BrainFreeze POS` del usuario — falta que el usuario la cree
+el spreadsheet `Chupe y Me Deja POS` del usuario — falta que el usuario la cree
 manualmente (mismo nombre que `SHEETS_WORKSHEET_CATEGORIAS`, default
 `"Categorias"`) para que la sincronización de categorías escriba filas
 reales; hasta entonces, cada creación/actualización de categoría loguea el
@@ -439,9 +439,9 @@ backend-dev.
 9. **Estado real verificado**: `backend/.env` real ya tenía
    `SHEETS_SYNC_ENABLED=true` y credenciales reales desde el setup de BE-012 (no
    algo que esta tarea haya introducido) — coincide con lo documentado en
-   "Pruebas realizadas" #6. Confirmé en `brainfreeze.db` que la categoría de
+   "Pruebas realizadas" #6. Confirmé en `chupeymedeja.db` que la categoría de
    prueba (`BE014-Test`) fue efectivamente eliminada y que el usuario de prueba
-   `test-be014@brainfreeze.com` quedó (mismo patrón que `test-be012@...`, no hay
+   `test-be014@chupeymedeja.com` quedó (mismo patrón que `test-be012@...`, no hay
    script de borrado de usuarios en el proyecto).
 
 No se usaron linters/type-checkers ni `pytest` (no están instalados en el

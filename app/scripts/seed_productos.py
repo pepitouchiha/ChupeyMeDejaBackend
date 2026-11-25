@@ -4,14 +4,20 @@ Idempotente: si una categoría o producto con el mismo nombre ya existe, no lo
 duplica (se actualiza el precio/estado del producto existente en vez de
 crear otro).
 
+Son datos de EJEMPLO para desarrollo; no usar en la base de producción.
+
 Uso (desde backend/, con el venv activado):
-    python -m app.scripts.seed_productos
+    python -m app.scripts.seed_productos "Asunción"
 """
 
 from __future__ import annotations
 
+import argparse
+
 from app.db.base_all import Base
 from app.db.session import SessionLocal, engine
+from app.db.tenancy import fijar_sede
+from app.models.sede import Sede
 from app.models.categoria import Categoria
 from app.models.producto import ESTADO_DISPONIBLE, Producto
 
@@ -74,10 +80,15 @@ def _crear_o_actualizar_producto(
         producto.tamano = tamano
 
 
-def seed() -> None:
+def seed(nombre_sede: str) -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
+        sede = db.query(Sede).filter(Sede.nombre == nombre_sede).first()
+        if sede is None:
+            nombres = [s.nombre for s in db.query(Sede).all()]
+            raise SystemExit(f"No existe la sede '{nombre_sede}'. Sedes: {nombres}")
+        fijar_sede(db, sede.id)
         categorias_por_nombre = {
             c["nombre"]: _obtener_o_crear_categoria(db, c["nombre"], c["color"]) for c in CATEGORIAS
         }
@@ -124,4 +135,6 @@ def seed() -> None:
 
 
 if __name__ == "__main__":
-    seed()
+    parser = argparse.ArgumentParser(description="Carga productos de ejemplo en una sede.")
+    parser.add_argument("sede", help="Nombre exacto de la sede")
+    seed(parser.parse_args().sede)

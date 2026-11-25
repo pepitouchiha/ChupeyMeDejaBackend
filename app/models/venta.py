@@ -6,6 +6,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.sede import SedeScoped
 
 METODO_EFECTIVO = "efectivo"
 METODO_TRANSFERENCIA = "transferencia"
@@ -15,7 +16,7 @@ ESTADO_CANCELADA = "cancelada"
 ESTADO_ABIERTA = "abierta"
 
 
-class Venta(Base):
+class Venta(SedeScoped, Base):
     __tablename__ = "ventas"
     __table_args__ = (
         CheckConstraint(
@@ -36,6 +37,9 @@ class Venta(Base):
     metodo_pago: Mapped[str | None] = mapped_column(String(20), nullable=True)
     estado: Mapped[str] = mapped_column(String(10), nullable=False, default=ESTADO_ACTIVA)
     total: Mapped[int] = mapped_column(Integer, nullable=False)
+    caja_sesion_id: Mapped[int | None] = mapped_column(
+        ForeignKey("caja_sesiones.id"), nullable=True
+    )
     creado_en: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -43,9 +47,14 @@ class Venta(Base):
     items: Mapped[list["VentaItem"]] = relationship(
         "VentaItem", back_populates="venta", cascade="all, delete-orphan"
     )
+    mesa: Mapped["Mesa | None"] = relationship("Mesa", viewonly=True)
+
+    @property
+    def mesa_nombre(self) -> str | None:
+        return self.mesa.nombre_o_numero if self.mesa is not None else None
 
 
-class VentaItem(Base):
+class VentaItem(SedeScoped, Base):
     __tablename__ = "venta_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -55,3 +64,8 @@ class VentaItem(Base):
     precio_unitario: Mapped[int] = mapped_column(Integer, nullable=False)
 
     venta: Mapped["Venta"] = relationship("Venta", back_populates="items")
+    producto: Mapped["Producto"] = relationship("Producto", viewonly=True)
+
+    @property
+    def nombre_producto(self) -> str:
+        return self.producto.nombre

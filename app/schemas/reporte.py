@@ -55,3 +55,32 @@ class VentaPorDia(BaseModel):
     margen_incompleto: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InvertidoPorCategoria(BaseModel):
+    categoria: str
+    etiqueta: str
+    total: int
+
+
+class ContabilidadPorDia(BaseModel):
+    fecha: date
+    ventas: int
+    invertido: int
+    ganancia_neta: int
+
+
+class ReporteContabilidadOut(BaseModel):
+    desde: date
+    hasta: date
+    ventas_total: int
+    ventas_efectivo: int
+    ventas_transferencia: int
+    num_ventas: int
+    invertido_total: int
+    invertido_por_categoria: list[InvertidoPorCategoria]
+    ganancia_neta: int
+    margen_productos: int
+    margen_incompleto: bool
+    valor_inventario_actual: int
+    por_dia: list[ContabilidadPorDia]

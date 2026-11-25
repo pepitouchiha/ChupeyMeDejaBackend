@@ -100,9 +100,9 @@ evaluarlo, pero no lo até a esta tarea para evitar scope creep.
 desarrollo:** igual que documenta BE-009 para el cambio de `CheckConstraint`, este proyecto
 no usa Alembic — el schema se crea con `Base.metadata.create_all`, que **no** altera una
 tabla `productos` ya existente para agregarle la columna nueva `imagen_base64`. Sobre un
-`brainfreeze.db` previo a esta tarea, la columna nueva no aparecería sin borrar el archivo y
+`chupeymedeja.db` previo a esta tarea, la columna nueva no aparecería sin borrar el archivo y
 dejar que se recree. Esto ya se resolvió como parte del cierre conjunto de BE-009: se detuvo
-el uvicorn de desarrollo (puerto 8000) y se borró `backend/brainfreeze.db` (ver notas de
+el uvicorn de desarrollo (puerto 8000) y se borró `backend/chupeymedeja.db` (ver notas de
 BE-009 para el detalle del proceso). Al recrearse desde cero en el próximo arranque, la
 tabla `productos` incluirá la columna `imagen_base64` correctamente.
 

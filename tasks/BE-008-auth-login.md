@@ -126,13 +126,13 @@ sistema de roles/permisos.
   (el email real se valida por existencia contra la DB, no por regex
   estricta). Se normaliza a minúsculas y se hace trim tanto en el schema de
   login como en el script de creación de usuario, para que
-  `admin@Brainfreeze.com` y `admin@brainfreeze.com` sean el mismo usuario.
+  `admin@chupeymedeja.com` y `admin@chupeymedeja.com` sean el mismo usuario.
 
 ### Cómo crear el usuario inicial
 
 ```powershell
 cd backend
-.\.venv\Scripts\python -m app.scripts.crear_usuario admin@brainfreeze.com "MiPasswordSegura123"
+.\.venv\Scripts\python -m app.scripts.crear_usuario admin@chupeymedeja.com "MiPasswordSegura123"
 ```
 
 Es idempotente: si el email ya existe, actualiza la contraseña (upsert) en
@@ -153,10 +153,10 @@ GET http://127.0.0.1:8000/health
 GET http://127.0.0.1:8000/categorias   (sin header Authorization)
 → 401 {"detail":"No autenticado"}
 
-POST http://127.0.0.1:8000/auth/login  {"email":"admin@brainfreeze.com","password":"mal"}
+POST http://127.0.0.1:8000/auth/login  {"email":"admin@chupeymedeja.com","password":"mal"}
 → 401 {"detail":"Credenciales inválidas"}
 
-POST http://127.0.0.1:8000/auth/login  {"email":"admin@brainfreeze.com","password":"MiPasswordSegura123"}
+POST http://127.0.0.1:8000/auth/login  {"email":"admin@chupeymedeja.com","password":"MiPasswordSegura123"}
 → 200 {"access_token":"<jwt>","token_type":"bearer"}
 
 GET http://127.0.0.1:8000/categorias   -H "Authorization: Bearer <jwt>"
@@ -175,7 +175,7 @@ recibido (200); `/categorias` con un token manipulado/inválido (401);
 el flujo completo funciona end-to-end sobre un endpoint ya protegido.
 También se verificó que re-ejecutar `crear_usuario` con el mismo email
 actualiza la contraseña (el login con la contraseña vieja pasa a fallar con
-401 y con la nueva funciona). No quedó ningún `brainfreeze.db` ni proceso
+401 y con la nueva funciona). No quedó ningún `chupeymedeja.db` ni proceso
 de prueba corriendo tras la verificación.
 
 ## Revisión
@@ -188,7 +188,7 @@ Verificado con el servidor real corriendo (venv temporal con
 - `GET /health` accesible sin token (200) — confirmado.
 - `GET /categorias` y `GET /mesas` sin header `Authorization` → 401
   `{"detail":"No autenticado"}` — confirmado.
-- `python -m app.scripts.crear_usuario admin@brainfreeze.com "..."` crea el
+- `python -m app.scripts.crear_usuario admin@chupeymedeja.com "..."` crea el
   usuario correctamente (upsert, sin endpoint de registro público) —
   confirmado.
 - `POST /auth/login` con password incorrecta → 401

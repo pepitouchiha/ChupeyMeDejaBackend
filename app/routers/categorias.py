@@ -1,32 +1,23 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core import config
-from app.core.security import require_auth
+from app.core.security import require_sede, solo_admin
 from app.db.session import get_db
 from app.models.categoria import Categoria
-from app.models.insumo import Insumo
 from app.models.producto import Producto
 from app.schemas.categoria import CategoriaCreate, CategoriaOut, CategoriaUpdate
-from app.services.sheets_service import sync_categoria_to_sheets
 
-router = APIRouter(prefix="/categorias", tags=["categorias"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/categorias", tags=["categorias"], dependencies=[Depends(require_sede)])
 
 
 def _contar_productos(db: Session, categoria_id: int) -> int:
     return (
         db.query(func.count(Producto.id)).filter(Producto.categoria_id == categoria_id).scalar()
         or 0
-    )
-
-
-def _contar_insumos(db: Session, categoria_id: int) -> int:
-    return (
-        db.query(func.count(Insumo.id)).filter(Insumo.categoria_id == categoria_id).scalar() or 0
     )
 
 
@@ -45,10 +36,9 @@ def listar_categorias(db: Session = Depends(get_db)) -> list[CategoriaOut]:
     return [_a_out(db, c) for c in categorias]
 
 
-@router.post("", response_model=CategoriaOut, status_code=status.HTTP_201_CREATED)
+@router.post("", dependencies=[solo_admin], response_model=CategoriaOut, status_code=status.HTTP_201_CREATED)
 def crear_categoria(
     payload: CategoriaCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> CategoriaOut:
     existe = db.query(Categoria).filter(Categoria.nombre == payload.nombre).first()
@@ -63,23 +53,14 @@ def crear_categoria(
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Ya existe una categoría con ese nombre")
     db.refresh(categoria)
 
-    if config.SHEETS_SYNC_ENABLED:
-        categoria_dict = {
-            "id": categoria.id,
-            "nombre": categoria.nombre,
-            "color": categoria.color,
-        }
-        background_tasks.add_task(sync_categoria_to_sheets, categoria_dict)
-
     return _a_out(db, categoria)
 
 
-@router.put("/{categoria_id}", response_model=CategoriaOut)
-@router.patch("/{categoria_id}", response_model=CategoriaOut)
+@router.put("/{categoria_id}", dependencies=[solo_admin], response_model=CategoriaOut)
+@router.patch("/{categoria_id}", dependencies=[solo_admin], response_model=CategoriaOut)
 def actualizar_categoria(
     categoria_id: int,
     payload: CategoriaUpdate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> CategoriaOut:
     categoria = db.get(Categoria, categoria_id)
@@ -106,32 +87,20 @@ def actualizar_categoria(
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Ya existe una categoría con ese nombre")
     db.refresh(categoria)
 
-    if config.SHEETS_SYNC_ENABLED:
-        categoria_dict = {
-            "id": categoria.id,
-            "nombre": categoria.nombre,
-            "color": categoria.color,
-        }
-        background_tasks.add_task(sync_categoria_to_sheets, categoria_dict)
-
     return _a_out(db, categoria)
 
 
-@router.delete("/{categoria_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete("/{categoria_id}", dependencies=[solo_admin], status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def eliminar_categoria(categoria_id: int, db: Session = Depends(get_db)) -> None:
     categoria = db.get(Categoria, categoria_id)
     if categoria is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Categoría no encontrada")
 
     productos = _contar_productos(db, categoria_id)
-    insumos = _contar_insumos(db, categoria_id)
-    if productos or insumos:
+    if productos:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            detail=(
-                f"No se puede eliminar la categoría: tiene {productos} producto(s) y "
-                f"{insumos} insumo(s) asociados"
-            ),
+            detail=f"No se puede eliminar la categoría: tiene {productos} producto(s) asociados",
         )
 
     db.delete(categoria)

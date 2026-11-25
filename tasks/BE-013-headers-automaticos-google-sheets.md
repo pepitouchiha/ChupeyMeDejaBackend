@@ -15,7 +15,7 @@ BE-012 (`done`) ya sincroniza cada venta a la hoja `Ventas_Diarias` vía
 ("ID Venta"), `creado_en` ("Fecha"), `metodo_pago` ("Método de pago"),
 `mesa_id` ("Mesa"), `total` ("Total"), `items_resumen` ("Productos"). El
 usuario ya probó esto de punta a punta contra su Google Sheet real
-("BrainFreeze POS" / pestaña "Ventas_Diarias") y confirmó que las filas de
+("Chupe y Me Deja POS" / pestaña "Ventas_Diarias") y confirmó que las filas de
 venta se insertan correctamente.
 
 Hoy el usuario tiene que escribir la fila de encabezados a mano la primera
@@ -125,7 +125,7 @@ encabezados antes de insertar la primera venta.
 - [ ] Las pruebas anteriores se validan con pruebas propias del
       backend-dev (mocks de `gspread`/`Worksheet`, o una hoja de prueba
       real si lo prefiere) **sin** depender de que el usuario intervenga.
-      Si además se corre contra el Google Sheet real del usuario ("BrainFreeze
+      Si además se corre contra el Google Sheet real del usuario ("Chupe y Me Deja
       POS" / "Ventas_Diarias", ya autorizado y configurado), documentarlo en
       notas de implementación, pero no es bloqueante para pasar a
       `in-review`.
@@ -200,7 +200,7 @@ verifica, contra el código real de `sheets_service.py`:
   proceso no se reintenta (`acell`/`insert_row` siguen en 1), confirmando
   que se cachea el intento fallido y no solo el éxito.
 
-No se probó contra el Google Sheet real del usuario ("BrainFreeze POS" /
+No se probó contra el Google Sheet real del usuario ("Chupe y Me Deja POS" /
 "Ventas_Diarias") para esta tarea: la hoja real ya tiene headers puestos a
 mano, así que una prueba ahí solo ejercitaría el escenario "ya tiene
 encabezados" (cubierto por el mock del segundo escenario) y no aporta

@@ -125,7 +125,7 @@ duplicado (409), color inválido (422), listar (200), editar por PUT y PATCH
 (200, incluyendo rechazo de nombre duplicado por 409), eliminar no
 encontrada (404), eliminar existente (204), y el caso de bloqueo por
 productos asociados (409) creando manualmente una tabla `productos` de
-prueba con SQLite. No quedó ningún `brainfreeze.db` ni proceso de prueba
+prueba con SQLite. No quedó ningún `chupeymedeja.db` ni proceso de prueba
 corriendo tras la verificación.
 
 ## Revisión

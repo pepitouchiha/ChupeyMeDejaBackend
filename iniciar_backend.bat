@@ -1,6 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
-rem Arranca el backend de BrainFreeze. Vive en la raiz de backend\ (al lado de app\);
+rem Arranca el backend de Chupe y Me Deja en este PC (solo desarrollo local;
+rem en produccion el backend corre en Render). Vive en la raiz de backend\ (al lado de app\);
 rem todo se resuelve desde la ubicacion de este .bat, asi funciona aunque el acceso
 rem directo de la carpeta de inicio de Windows tenga otro "Iniciar en".
 
@@ -13,7 +14,7 @@ set "PORT=8000"
 set "MAX_REINTENTOS=5"
 set "PYTHONUTF8=1"
 
-title BrainFreeze - Backend
+title Chupe y Me Deja - Backend
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 
 if not exist "%BACKEND%\app\main.py" (
@@ -36,7 +37,7 @@ if not exist "%PY%" (
 
 rem Un .venv copiado desde otro PC, o creado con un Python que luego se
 rem desinstalo/actualizo, queda roto: python.exe existe pero no arranca.
-"%PY%" -c "import fastapi, uvicorn, sqlalchemy, dotenv, jwt, bcrypt, gspread" >nul 2>&1
+"%PY%" -c "import fastapi, uvicorn, sqlalchemy, dotenv, jwt, bcrypt, psycopg" >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] El entorno virtual esta roto o le faltan dependencias.
     echo         Recrealo:
@@ -44,7 +45,7 @@ if errorlevel 1 (
     echo           rmdir /s /q .venv
     echo           python -m venv .venv
     echo           .venv\Scripts\pip install -r requirements.txt
-    "%PY%" -c "import fastapi, uvicorn, sqlalchemy, dotenv, jwt, bcrypt, gspread"
+    "%PY%" -c "import fastapi, uvicorn, sqlalchemy, dotenv, jwt, bcrypt, psycopg"
     goto :fallo
 )
 

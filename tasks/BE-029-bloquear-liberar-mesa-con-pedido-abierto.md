@@ -154,8 +154,8 @@ limpios — SQLite en Windows bloquea el archivo mientras el proceso lo tiene
 abierto, así que hubo que matar el proceso anterior antes de borrar el
 `.db`), con SQLite temporal propia (`SHEETS_SYNC_ENABLED=false`) y un
 script Python (`requests`) encadenado. Nunca se tocó
-`backend/brainfreeze.db` real ni el servidor real de `:8000` (confirmado
-con `git status` al final: no aparece `brainfreeze.db` modificado).
+`backend/chupeymedeja.db` real ni el servidor real de `:8000` (confirmado
+con `git status` al final: no aparece `chupeymedeja.db` modificado).
 
 Escenario del bug original reproducido exactamente como lo describe la
 tarea:

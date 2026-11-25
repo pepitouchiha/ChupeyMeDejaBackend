@@ -206,7 +206,7 @@ afectados, no como parche puntual solo en `/reportes/hoy`.
   normalmente no hace falta (usan tzdata del sistema), pero en Windows sí.
 
 **Verificación del caso del bug (BD SQLite temporal, no se tocó
-`brainfreeze.db`):** script standalone que crea una BD en
+`chupeymedeja.db`):** script standalone que crea una BD en
 `%TEMP%\be024_test.db`, inserta ventas con `creado_en` naive-UTC directo
 (sin pasar por reloj del sistema) y llama las funciones de los routers
 directamente:
@@ -258,7 +258,7 @@ API; el frontend sigue recibiendo el mismo formato que antes).
 
 Código revisado (`app/core/config.py`, `app/core/timezone.py`, `app/routers/reportes.py`,
 `app/routers/ventas.py`, `requirements.txt`) y verificado con pruebas reales contra una
-BD SQLite temporal (`%TEMP%\...\scratchpad\be024_test.db`, no se tocó `brainfreeze.db`),
+BD SQLite temporal (`%TEMP%\...\scratchpad\be024_test.db`, no se tocó `chupeymedeja.db`),
 importando y ejecutando directamente las funciones de los routers (sin levantar
 servidor) con `hoy_local` parcheado para simular distintos "hoy":
 

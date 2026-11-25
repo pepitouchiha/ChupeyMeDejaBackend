@@ -2,16 +2,26 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.sede import SedeScoped
 
 ESTADO_DISPONIBLE = "disponible"
 ESTADO_AGOTADO = "agotado"
 
 
-class Producto(Base):
+class Producto(SedeScoped, Base):
     __tablename__ = "productos"
     __table_args__ = (
         CheckConstraint(
@@ -31,3 +41,33 @@ class Producto(Base):
     creado_en: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
+
+    insumos: Mapped[list["ProductoInsumo"]] = relationship(
+        "ProductoInsumo",
+        back_populates="producto",
+        cascade="all, delete-orphan",
+        order_by="ProductoInsumo.id",
+    )
+
+
+class ProductoInsumo(SedeScoped, Base):
+    __tablename__ = "producto_insumos"
+    __table_args__ = (
+        UniqueConstraint("producto_id", "insumo_id", name="uq_producto_insumos_producto_insumo"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    producto_id: Mapped[int] = mapped_column(ForeignKey("productos.id"), nullable=False, index=True)
+    insumo_id: Mapped[int] = mapped_column(ForeignKey("insumos.id"), nullable=False, index=True)
+    cantidad: Mapped[float] = mapped_column(Float, nullable=False)
+
+    producto: Mapped["Producto"] = relationship("Producto", back_populates="insumos")
+    insumo: Mapped["Insumo"] = relationship("Insumo", viewonly=True)
+
+    @property
+    def nombre(self) -> str:
+        return self.insumo.nombre
+
+    @property
+    def unidad(self) -> str:
+        return self.insumo.unidad

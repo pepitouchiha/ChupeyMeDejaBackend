@@ -182,7 +182,7 @@ responden `401`.
 SQLite propia en el scratchpad de la sesión, `SHEETS_SYNC_ENABLED=false`)
 reutilizado de BE-025/BE-026/BE-027, con `curl` para los casos numéricos de
 reportes/mesas descritos arriba. Servidor y base de datos temporal
-detenidos/eliminados al finalizar; no se tocó `backend/brainfreeze.db`
+detenidos/eliminados al finalizar; no se tocó `backend/chupeymedeja.db`
 real (confirmado con `git status`, sin cambios en ese archivo).
 
 ## Revisión

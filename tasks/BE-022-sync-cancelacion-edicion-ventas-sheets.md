@@ -192,7 +192,7 @@ sincronizó nada retroactivo de ventas ya existentes en la hoja.
      `Estado == "activa"`.
    - Confirmado también que `_HEADERS_VENTAS[-1] == "Estado"` en runtime.
 2. **Contra el servidor real** (`uvicorn`, misma SQLite temporal reutilizada
-   de BE-020/BE-021, sin tocar `brainfreeze.db` real), dos configuraciones:
+   de BE-020/BE-021, sin tocar `chupeymedeja.db` real), dos configuraciones:
    - `SHEETS_SYNC_ENABLED=false` (todas las pruebas de BE-020/BE-021 de esta
      sesión): `crear_venta`, `actualizar_venta`, `cancelar_venta` responden
      `201`/`200`/`200`/`409`/`404` normalmente, sin ningún log relacionado a
@@ -212,7 +212,7 @@ el spreadsheet real si el usuario ya tiene `credentials.json`/
 `authorized_user.json` reales. Verifiqué que ambos archivos existen en
 `backend/` (generados, según BE-019, el 2026-09-04) y que `.env` tiene
 `SHEETS_SYNC_ENABLED=true`. **Decidí no ejecutar esa prueba end-to-end
-contra el spreadsheet real de producción (`BrainFreeze POS` / hoja
+contra el spreadsheet real de producción (`Chupe y Me Deja POS` / hoja
 `Ventas_Diarias`)** por un riesgo concreto que no existía en BE-014/015/016:
 a diferencia de categorías/productos/insumos (que sí tienen `DELETE`, y las
 tareas anteriores crearon-y-borraron una fila de prueba real), **una venta

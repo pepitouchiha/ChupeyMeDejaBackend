@@ -208,7 +208,7 @@ la migración y `productos_count` siguió reflejándose correctamente en
 `GET /categorias` junto con el conteo de insumos. Confirmé además que
 `GET /insumos` sin header `Authorization` responde 401 (protegido con
 `require_auth`, igual que `/categorias` y `/mesas`). No quedó ningún
-`brainfreeze.db` ni proceso de prueba corriendo tras la verificación.
+`chupeymedeja.db` ni proceso de prueba corriendo tras la verificación.
 
 ## Revisión
 

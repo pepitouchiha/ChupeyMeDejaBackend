@@ -66,7 +66,7 @@ verificación abajo para lo que sí se puede y se debe probar ahora.
    `pydantic-settings` ni nada nuevo):
    - `SHEETS_SYNC_ENABLED: bool` — parseado desde string (`"true"`/`"false"`,
      case-insensitive), default `False`.
-   - `SHEETS_SPREADSHEET_NAME: str`, default `"BrainFreeze POS"`.
+   - `SHEETS_SPREADSHEET_NAME: str`, default `"Chupe y Me Deja POS"`.
    - `SHEETS_WORKSHEET_NAME: str`, default `"Ventas_Diarias"`.
    - `SHEETS_CREDENTIALS_FILE: Path` (o `str`), default
      `BASE_DIR / "credentials.json"`.
@@ -128,7 +128,7 @@ verificación abajo para lo que sí se puede y se debe probar ahora.
   — si falla, se loguea y se pierde ese registro puntual (es un backup de
   mejor esfuerzo, no la fuente de verdad; la fuente de verdad sigue siendo
   SQLite).
-- Sincronización retroactiva de ventas ya existentes en `brainfreeze.db`
+- Sincronización retroactiva de ventas ya existentes en `chupeymedeja.db`
   antes de esta tarea.
 - Cualquier endpoint o UI para consultar/gestionar el estado de la
   sincronización — el dashboard de solo lectura es el propio Google Sheet.
@@ -192,7 +192,7 @@ verificación abajo para lo que sí se puede y se debe probar ahora.
 - `backend/app/scripts/setup_google_sheets.py`: script CLI (`python -m app.scripts.setup_google_sheets`), misma convención de docstring/`main()` que `crear_usuario.py`. Valida primero que exista `SHEETS_CREDENTIALS_FILE` (si no, imprime instrucciones a `stderr` y sale con código 1, sin intentar `gspread.oauth`); si existe, llama `gspread.oauth(...)` (este sí puede abrir navegador, se corre a propósito). Al terminar imprime confirmación con la ruta absoluta de `authorized_user.json` y recuerda activar `SHEETS_SYNC_ENABLED=true`.
 
 **Archivos modificados:**
-- `backend/app/core/config.py`: 5 variables nuevas (`SHEETS_SYNC_ENABLED` bool parseado de string case-insensitive, default `False`; `SHEETS_SPREADSHEET_NAME` default `"BrainFreeze POS"`; `SHEETS_WORKSHEET_NAME` default `"Ventas_Diarias"`; `SHEETS_CREDENTIALS_FILE`/`SHEETS_AUTHORIZED_USER_FILE` como `Path`, default `BASE_DIR / "credentials.json"` / `BASE_DIR / "authorized_user.json"`), mismo patrón `os.getenv` que el resto del archivo.
+- `backend/app/core/config.py`: 5 variables nuevas (`SHEETS_SYNC_ENABLED` bool parseado de string case-insensitive, default `False`; `SHEETS_SPREADSHEET_NAME` default `"Chupe y Me Deja POS"`; `SHEETS_WORKSHEET_NAME` default `"Ventas_Diarias"`; `SHEETS_CREDENTIALS_FILE`/`SHEETS_AUTHORIZED_USER_FILE` como `Path`, default `BASE_DIR / "credentials.json"` / `BASE_DIR / "authorized_user.json"`), mismo patrón `os.getenv` que el resto del archivo.
 - `backend/app/routers/ventas.py`: `crear_venta` ahora recibe `background_tasks: BackgroundTasks`. Después de `db.refresh(venta)` y antes del `return`, si `config.SHEETS_SYNC_ENABLED` es `True` se arma un diccionario plano (`id`, `creado_en` vía `.isoformat()`, `metodo_pago`, `mesa_id`, `total`, `items` con `producto_id`/`cantidad`/`precio_unitario`/`nombre_producto` resuelto de `productos_por_id` ya en memoria — sin query adicional) y se encola con `background_tasks.add_task(sync_venta_to_sheets, venta_dict)`. Toda esa rama vive dentro del `if`, así que con el flag en `False` (default) no se evalúa nada de esto ni se toca `gspread`/red/disco. El objeto ORM `venta`/`venta.items` nunca se pasa directamente a la tarea de fondo, solo el dict con tipos primitivos ya materializados mientras la sesión sigue viva.
 - `backend/requirements.txt`: ya traía `gspread==6.1.2`, `google-auth==2.34.0`, `google-auth-oauthlib==1.2.1` (agregados antes de esta tarea); se instalaron en `.venv` (`pip install -r requirements.txt`) porque no estaban presentes.
 - `backend/.env.example`: agregadas las 5 variables nuevas, `SHEETS_SYNC_ENABLED=false` sin comentar como default explícito.
@@ -205,14 +205,14 @@ verificación abajo para lo que sí se puede y se debe probar ahora.
 **Pruebas realizadas** (servidor real corriendo en background, `http://127.0.0.1:8000`, más scripts standalone para los escenarios que requerían mockear `gspread` o cambiar el flag sin reiniciar el proceso en background):
 1. `GET /health` → `200 {"status":"ok","database":"ok"}` antes y después de todos los cambios (confirmando que `--reload` cargó el código nuevo sin romper nada).
 2. Instalación de dependencias: `.venv\Scripts\pip install -r requirements.txt` instaló `gspread`, `google-auth`, `google-auth-oauthlib` (no estaban presentes).
-3. **`SHEETS_SYNC_ENABLED=false` (default, contra el servidor real en background):** `POST /ventas` con `{"metodo_pago":"efectivo","items":[{"producto_id":14,"cantidad":2}]}` (usuario de prueba `test-be012@brainfreeze.com` creado vía `crear_usuario.py`) → `201` con el mismo body de siempre.
+3. **`SHEETS_SYNC_ENABLED=false` (default, contra el servidor real en background):** `POST /ventas` con `{"metodo_pago":"efectivo","items":[{"producto_id":14,"cantidad":2}]}` (usuario de prueba `test-be012@chupeymedeja.com` creado vía `crear_usuario.py`) → `201` con el mismo body de siempre.
 4. **`SHEETS_SYNC_ENABLED=true`, sin `credentials.json`/`authorized_user.json` en disco:** como el proceso en background carga el `.env` una sola vez al arrancar (no se reinicia por cambios en `.env`), se verificó este escenario con un script standalone (`fastapi.testclient.TestClient` sobre la misma `app`, con `config.SHEETS_SYNC_ENABLED = True` seteado en memoria antes de importar el router) — `POST /ventas` devolvió `201` con la venta creada normalmente, y en el log apareció exactamente: `WARNING app.services.sheets_service: No se encontró 'authorized_user.json'. Corre 'python -m app.scripts.setup_google_sheets'...` — sin excepción sin capturar ni 500. (Se instaló `httpx` temporalmente en el `.venv` solo para poder usar `TestClient` en esta prueba puntual, y se desinstaló al terminar; no se agregó a `requirements.txt`.)
 5. **`sync_venta_to_sheets` nunca propaga excepciones** — probado con `unittest.mock.patch` sobre `gspread.oauth` simulando 5 escenarios distintos: `SpreadsheetNotFound`, `APIError`, `GoogleAuthError`, `requests.exceptions.ConnectionError`, y una excepción genérica inesperada (`RuntimeError`) — en los 5 casos la función retornó normalmente sin propagar nada, cada una logueando la rama correspondiente (la genérica con `logger.exception`, que sí imprime traceback en el log pero no relanza la excepción).
 6. **Caché del cliente/worksheet a nivel de módulo** — con `gspread.oauth` mockeado y `authorized_user.json` "presente" (archivo dummy), se llamó `sync_venta_to_sheets` dos veces seguidas: `gspread.oauth.call_count == 1` y `worksheet.append_row.call_count == 2`, confirmando que la segunda llamada reutiliza el worksheet cacheado.
 7. `python -m app.scripts.setup_google_sheets` corrido sin `credentials.json` real → imprime el mensaje de instrucciones a `stderr` y sale con código 1 sin ningún error de import ni traceback.
 8. Se revirtió cualquier cambio temporal a `.env` usado durante las pruebas (el `.env` real del proyecto quedó exactamente igual que antes de esta tarea, sin la variable `SHEETS_SYNC_ENABLED` — o sea, usando el default `False`).
 
-**Pendiente explícito (fuera de alcance de esta tarea, como ya estaba acordado):** no se probó end-to-end contra un Google Sheet real ni contra `gspread.oauth` real, porque el usuario todavía no tiene su `credentials.json` generado en Google Cloud Console. Falta que el usuario: (1) genere el OAuth client ID de escritorio con su cuenta personal, (2) corra `python -m app.scripts.setup_google_sheets` para generar su `authorized_user.json`, y (3) active `SHEETS_SYNC_ENABLED=true` y verifique que las filas efectivamente aparecen en su spreadsheet `BrainFreeze POS` / hoja `Ventas_Diarias`. También queda pendiente confirmar con el usuario si el formato de una fila por venta con el resumen de items en una sola celda le sirve para su dashboard, o si prefiere una fila por item / columnas separadas.
+**Pendiente explícito (fuera de alcance de esta tarea, como ya estaba acordado):** no se probó end-to-end contra un Google Sheet real ni contra `gspread.oauth` real, porque el usuario todavía no tiene su `credentials.json` generado en Google Cloud Console. Falta que el usuario: (1) genere el OAuth client ID de escritorio con su cuenta personal, (2) corra `python -m app.scripts.setup_google_sheets` para generar su `authorized_user.json`, y (3) active `SHEETS_SYNC_ENABLED=true` y verifique que las filas efectivamente aparecen en su spreadsheet `Chupe y Me Deja POS` / hoja `Ventas_Diarias`. También queda pendiente confirmar con el usuario si el formato de una fila por venta con el resumen de items en una sola celda le sirve para su dashboard, o si prefiere una fila por item / columnas separadas.
 
 ## Revisión
 
@@ -225,7 +225,7 @@ en lo reportado por la implementación:
    confirmé que `backend/.env` NO tiene ninguna de las 5 variables `SHEETS_*`
    (solo `.env.example` las documenta), por lo que se usa el default `False` de
    `app/core/config.py:28`. Hice `POST /ventas` contra el servidor real corriendo
-   (`admin@brainfreeze.com`) y obtuve `201` con el body de siempre — la rama de
+   (`admin@chupeymedeja.com`) y obtuve `201` con el body de siempre — la rama de
    `app/routers/ventas.py:88-105` está enteramente dentro del `if`, así que con
    el flag en `False` no se evalúa nada de esa rama (confirmado por lectura y
    por prueba empírica).

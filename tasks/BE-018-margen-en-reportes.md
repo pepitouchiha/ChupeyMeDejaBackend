@@ -176,9 +176,9 @@ para la limitación de timezone.
 **Cómo se probó:** no hay suite de tests automatizada en el proyecto (mismo
 caveat que BE-017: sin `httpx`/`TestClient`). Se probó llamando directamente
 a `reporte_hoy`/`reporte_mensual` con un `Session` real, usando dos bases de
-datos SQLite temporales (nunca se tocó `brainfreeze.db` real):
+datos SQLite temporales (nunca se tocó `chupeymedeja.db` real):
 
-1. Una copia de la `brainfreeze.db` real (ya con la columna `costo`
+1. Una copia de la `chupeymedeja.db` real (ya con la columna `costo`
    aplicada por BE-017), con sus `ventas`/`venta_items` preexistentes
    borrados para tener control total de los datos de prueba (evitar
    contaminación con ventas de sesiones de prueba anteriores de otras

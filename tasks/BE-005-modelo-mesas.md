@@ -147,7 +147,7 @@ sin ventas (204). Además se simuló manualmente en SQLite el estado
 `ocupada` y la existencia de la tabla `ventas` con una fila asociada para
 confirmar que `GET /mesas` refleja `ocupada`, que `liberar` la regresa a
 `libre` sin importar el estado previo, y que `DELETE` responde 409 cuando
-hay ventas asociadas. No quedó ningún `brainfreeze.db` ni proceso de prueba
+hay ventas asociadas. No quedó ningún `chupeymedeja.db` ni proceso de prueba
 corriendo tras la verificación.
 
 ## Revisión

@@ -191,14 +191,14 @@ todos exitosos:
 
 Script y servidor temporal eliminados/detenidos al finalizar (ver notas de
 BE-025 y BE-027 para el detalle de la limpieza); no se tocó
-`backend/brainfreeze.db` real.
+`backend/chupeymedeja.db` real.
 
 ## Revisión
 
 **Veredicto: `done`**
 
 Verificado end-to-end (servidor `uvicorn` propio, puerto 8300, SQLite
-temporal, sin tocar `brainfreeze.db` real), además de lo ya cubierto en
+temporal, sin tocar `chupeymedeja.db` real), además de lo ya cubierto en
 BE-025/BE-027:
 
 - Agregar 2 cafés + 1 postre incrementa `total` correctamente sobre el

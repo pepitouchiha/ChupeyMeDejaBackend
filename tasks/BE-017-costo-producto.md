@@ -83,7 +83,7 @@ esta tarea ni en ninguna otra actual.
     `precio`, `estado`, `sabor`, `tamano`).
 - Mismo caveat operativo que BE-009/BE-010 (sin Alembic, `Base.metadata.create_all`
   no altera una tabla `productos` ya existente): documentar en notas de
-  implementación el paso de borrar `brainfreeze.db` en desarrollo para que la
+  implementación el paso de borrar `chupeymedeja.db` en desarrollo para que la
   columna `costo` aparezca en un entorno con base de datos preexistente.
 
 **No incluye (fuera de alcance):**
@@ -129,7 +129,7 @@ esta tarea ni en ninguna otra actual.
       producto con `costo: null` escribe la celda vacía (`""`), nunca el
       string literal `"None"`.
 - [ ] Documentado en las notas de implementación el paso manual de borrar
-      `brainfreeze.db` en desarrollo para que la columna nueva tome efecto.
+      `chupeymedeja.db` en desarrollo para que la columna nueva tome efecto.
 
 ## Notas de implementación
 
@@ -167,14 +167,14 @@ Implementado tal como está descrito en la tarea, sin desviaciones.
 **Caveat operativo (SQLite sin Alembic), documentado según lo pedido por la
 tarea:** como en BE-009/BE-010/BE-015/BE-016, `Base.metadata.create_all` no
 altera una tabla `productos` ya existente en una base de datos preexistente
-(`brainfreeze.db`). Verificado reproduciendo el error exacto
+(`chupeymedeja.db`). Verificado reproduciendo el error exacto
 (`sqlite3.OperationalError: table productos has no column named costo`) al
 intentar insertar contra una copia de la base de datos de desarrollo actual
 sin recrearla. **Para que la columna `costo` tome efecto en un entorno de
-desarrollo con base de datos preexistente, hay que borrar `brainfreeze.db`
+desarrollo con base de datos preexistente, hay que borrar `chupeymedeja.db`
 manualmente antes de levantar el servidor** (se recreará automáticamente
 gracias al `lifespan` de `app/main.py`, que corre `Base.metadata.create_all`
-al arrancar). No se borró la `brainfreeze.db` real del repo como parte de
+al arrancar). No se borró la `chupeymedeja.db` real del repo como parte de
 esta tarea (tiene 15 productos y varios usuarios de prueba de tareas
 anteriores) — queda como paso manual a criterio de quien levante el entorno
 localmente.
@@ -185,7 +185,7 @@ dependencia nueva fuera de alcance), así que se probó llamando directamente
 a las funciones del router (`crear_producto`, `actualizar_producto`,
 `obtener_producto`, `listar_productos`) con un `Session` real contra una
 base de datos SQLite temporal (copia con esquema fresco, recreada con
-`Base.metadata.create_all` para simular el paso de borrar `brainfreeze.db`)
+`Base.metadata.create_all` para simular el paso de borrar `chupeymedeja.db`)
 en `app/db/session.SessionLocal`, y `BackgroundTasks()` real (sin invocar
 sync de Sheets porque `SHEETS_SYNC_ENABLED` es `false` por defecto). Casos
 verificados, todos exitosos:
@@ -213,7 +213,7 @@ verificados, todos exitosos:
   `""` y `0` respectivamente (nunca el string `"None"`).
 
 Para probar manualmente vía HTTP con el servidor real (requiere borrar
-`brainfreeze.db` primero si ya existe, y un login válido vía
+`chupeymedeja.db` primero si ya existe, y un login válido vía
 `POST /auth/login`):
 
 ```
@@ -228,7 +228,7 @@ GET /productos/{id}
 **Veredicto: `done`.**
 
 Revisé código (modelo, schemas, router, `sheets_service.py`) y corrí pruebas
-propias contra copias temporales de la `brainfreeze.db` real (que ya tiene la
+propias contra copias temporales de la `chupeymedeja.db` real (que ya tiene la
 columna `costo` aplicada por el orquestador), sin tocar la base real:
 
 - `backend/app/models/producto.py`: `costo: Mapped[int | None] =
@@ -252,7 +252,7 @@ columna `costo` aplicada por el orquestador), sin tocar la base real:
   - `_producto_dict_para_sheets` incluye `"costo": producto.costo` en el
     diccionario, junto al resto de campos, reutilizando el helper de BE-015
     sin duplicarlo.
-  - Corrí un flujo end-to-end real contra una copia de `brainfreeze.db`
+  - Corrí un flujo end-to-end real contra una copia de `chupeymedeja.db`
     (invocando `crear_producto`/`actualizar_producto`/`obtener_producto`/
     `listar_productos` directamente, sin servidor HTTP):
     - crear sin `costo` -> `costo: None`.

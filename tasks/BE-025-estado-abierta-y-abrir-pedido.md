@@ -231,7 +231,7 @@ renombrar" (a diferencia del resto del módulo, que solo agrega columnas):
 **Verificado explícitamente (no solo por lectura de código), con tres
 escenarios de base de datos distintos, todos con servidores `uvicorn`
 temporales en puertos propios (8197/8198/8199) sobre SQLite en el
-scratchpad de la sesión — nunca se tocó `backend/brainfreeze.db` real
+scratchpad de la sesión — nunca se tocó `backend/chupeymedeja.db` real
 (confirmado con `git status` al final, sin cambios en ese archivo):**
 
 1. **Base nueva (esquema ya correcto desde el inicio, puerto 8199):**
@@ -291,7 +291,7 @@ Código revisado (`app/models/venta.py`, `app/schemas/venta.py`,
 `app/routers/ventas.py`, `app/db/migrations.py`) coincide exactamente con lo
 descrito en las notas de implementación. Verificado end-to-end con un
 servidor `uvicorn` propio (puerto 8300) sobre una SQLite temporal en el
-scratchpad de la sesión (nunca se tocó `backend/brainfreeze.db`, confirmado
+scratchpad de la sesión (nunca se tocó `backend/chupeymedeja.db`, confirmado
 con `git status`):
 
 - `POST /ventas/abrir` con mesa existente sin pedido previo -> `201`,

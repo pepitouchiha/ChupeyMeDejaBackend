@@ -91,13 +91,13 @@ scope; si se necesita, debería salir como tarea nueva del planner).
 Cómo probarlo (backend con venv en `backend/.venv`):
 ```
 cd backend
-./.venv/Scripts/python.exe -m app.scripts.crear_usuario test@brainfreeze.com "Test123456"
+./.venv/Scripts/python.exe -m app.scripts.crear_usuario test@chupeymedeja.com "Test123456"
 ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
 ```
 ```
 TOKEN=$(curl -s -X POST http://127.0.0.1:8000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@brainfreeze.com","password":"Test123456"}' | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+  -d '{"email":"test@chupeymedeja.com","password":"Test123456"}' | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 
 curl -s http://127.0.0.1:8000/reportes/hoy -H "Authorization: Bearer $TOKEN"
 curl -s "http://127.0.0.1:8000/reportes/mensual?meses=6" -H "Authorization: Bearer $TOKEN"

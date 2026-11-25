@@ -85,7 +85,7 @@ cosas se hace aquí.
   tarea futura de un ticket aparte, no se improvisa aquí.
 - Mismo caveat operativo que BE-009/BE-010/BE-017 (sin Alembic,
   `Base.metadata.create_all` no altera una tabla `ventas` ya existente):
-  documentar en notas de implementación el paso de borrar `brainfreeze.db`
+  documentar en notas de implementación el paso de borrar `chupeymedeja.db`
   en desarrollo para que la columna `estado` tome efecto.
 
 ## Criterios de aceptación
@@ -113,7 +113,7 @@ cosas se hace aquí.
 - [ ] `POST /ventas/{id}/cancelar` con un `venta_id` inexistente responde
       `404`.
 - [ ] Documentado en las notas de implementación el paso manual de borrar
-      `brainfreeze.db` en desarrollo para que la columna nueva tome efecto
+      `chupeymedeja.db` en desarrollo para que la columna nueva tome efecto
       (mismo criterio que BE-017).
 - [ ] Endpoints existentes (`GET /ventas`, `POST /ventas`) sin header
       `Authorization` siguen devolviendo `401` (sin regresión).
@@ -154,9 +154,9 @@ Implementado tal como está descrito en la tarea, sin desviaciones.
 
 **Actualización posterior — migración automática ligera (pedida
 explícitamente por el usuario tras revisar el estado inicial de esta
-tarea):** el caveat original de "borrar `brainfreeze.db` manualmente" era
+tarea):** el caveat original de "borrar `chupeymedeja.db` manualmente" era
 aceptable en desarrollo, pero la base de datos **real** del cliente
-(`backend/brainfreeze.db` en su PC, instalada el 2026-09-04, con ventas
+(`backend/chupeymedeja.db` en su PC, instalada el 2026-09-04, con ventas
 históricas) no se puede borrar sin perder datos, y `Base.metadata.create_all`
 nunca altera una tabla `ventas` ya existente para agregarle la columna
 `estado` — desplegar esta tarea tal cual habría roto esa base real con
@@ -231,7 +231,7 @@ base de datos real del cliente:**
 
 Base de datos de prueba (con esquema viejo simulado) y procesos detenidos y
 eliminados del scratchpad de la sesión al terminar; no se tocó en ningún
-momento la `brainfreeze.db` real del repositorio (confirmado con `git
+momento la `chupeymedeja.db` real del repositorio (confirmado con `git
 status`, que no la muestra modificada).
 
 **Cómo se probó:** no hay suite de tests automatizada ni `httpx` instalado
@@ -303,7 +303,7 @@ esquema viejo.
   aplicación vía el enum Pydantic) — aceptable dado el alcance ligero
   pedido (sin Alembic).
 
-No se tocó la `brainfreeze.db` real del repo durante la verificación
+No se tocó la `chupeymedeja.db` real del repo durante la verificación
 (confirmado con `git status` en `backend/`, sin cambios fuera de los
 archivos de código/tareas esperados). No se encontraron hallazgos
 bloqueantes.
