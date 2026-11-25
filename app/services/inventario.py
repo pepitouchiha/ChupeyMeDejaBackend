@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from app.models.gasto import CAT_COMPRA_INVENTARIO, Gasto
@@ -32,7 +32,16 @@ def registrar_movimiento(
     No hace commit: el llamador decide, para que stock y movimiento se
     persistan siempre en la misma transacción.
     """
-    insumo.stock = insumo.stock + cantidad
+    # `stock = stock + cantidad` en SQL y no en Python: con dos ventas a la vez,
+    # la segunda espera el bloqueo de la fila y suma sobre el valor ya actualizado.
+    db.flush()
+    db.execute(
+        update(Insumo)
+        .where(Insumo.id == insumo.id)
+        .values(stock=Insumo.stock + cantidad)
+        .execution_options(synchronize_session=False)
+    )
+    db.refresh(insumo, attribute_names=["stock"])
     movimiento = MovimientoInventario(
         insumo_id=insumo.id,
         tipo=tipo,
@@ -88,7 +97,9 @@ def registrar_entrada(
         db, insumo, tipo=MOV_ENTRADA, cantidad=cantidad, costo_total=costo_total, nota=nota
     )
     if costo_total is not None:
-        insumo.costo_unitario = round(costo_total / cantidad)
+        # Una entrada regalada (costo 0) no cambia el costo unitario conocido.
+        if costo_total > 0:
+            insumo.costo_unitario = round(costo_total / cantidad)
         if registrar_gasto:
             registrar_gasto_de_entrada(
                 db, insumo, movimiento, pagado_desde_caja=pagado_desde_caja

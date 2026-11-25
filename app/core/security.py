@@ -109,6 +109,8 @@ def require_sede(
         sede = db.get(Sede, x_sede_id)
         if sede is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Sede no encontrada")
+        if not sede.activa and not usuario.es_superadmin:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Esta sede está desactivada.")
         sede_id = sede.id
     else:
         # Un empleado nunca puede operar sobre otra sede, aunque envíe el encabezado.
@@ -170,6 +172,10 @@ class LimitadorLogin:
     def registrar_fallo(self, clave: str) -> None:
         with self._lock:
             ahora = time.monotonic()
+            if len(self._fallos) > 5000:
+                # Purga claves vencidas para que el diccionario no crezca sin límite.
+                for k in list(self._fallos):
+                    self._vigentes(k, ahora)
             self._vigentes(clave, ahora)
             self._fallos.setdefault(clave, []).append(ahora)
 
@@ -182,7 +188,12 @@ limitador_login = LimitadorLogin(LOGIN_MAX_INTENTOS, LOGIN_BLOQUEO_MINUTOS * 60)
 
 
 def clave_login(request: Request, email: str) -> str:
-    # Render pone la IP real del cliente en X-Forwarded-For.
+    # El proxy de Render AGREGA la IP real del cliente al final de
+    # X-Forwarded-For. Las entradas anteriores las puede escribir el propio
+    # cliente, así que solo la última es confiable.
     reenviada = request.headers.get("x-forwarded-for", "")
-    ip = reenviada.split(",")[0].strip() if reenviada else (request.client.host if request.client else "?")
+    if reenviada:
+        ip = reenviada.split(",")[-1].strip()
+    else:
+        ip = request.client.host if request.client else "?"
     return f"{ip}|{email.strip().lower()}"

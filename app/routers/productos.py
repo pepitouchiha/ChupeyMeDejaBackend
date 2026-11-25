@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models.categoria import Categoria
 from app.models.insumo import Insumo
 from app.models.producto import Producto, ProductoInsumo
+from app.models.venta import VentaItem
 from app.schemas.producto import ProductoCreate, ProductoInsumoIn, ProductoOut, ProductoUpdate
 
 router = APIRouter(prefix="/productos", tags=["productos"], dependencies=[Depends(require_sede)])
@@ -146,5 +147,11 @@ def eliminar_producto(producto_id: int, db: Session = Depends(get_db)) -> None:
     producto = db.get(Producto, producto_id)
     if producto is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
+    # Las ventas guardan referencia al producto: borrarlo dejaría el historial roto.
+    if db.query(VentaItem.id).filter(VentaItem.producto_id == producto_id).first() is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Este producto ya tiene ventas registradas. Márcalo como agotado en lugar de eliminarlo.",
+        )
     db.delete(producto)
     db.commit()

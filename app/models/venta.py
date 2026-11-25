@@ -68,4 +68,4 @@ class VentaItem(SedeScoped, Base):
 
     @property
     def nombre_producto(self) -> str:
-        return self.producto.nombre
+        return self.producto.nombre if self.producto is not None else f"Producto #{self.producto_id}"

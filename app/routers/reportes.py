@@ -210,6 +210,7 @@ def reporte_mensual(
 
 
 DIAS_HISTORIAL_POR_DEFECTO = 30
+MAX_DIAS_CONTABILIDAD = 366
 
 
 @router.get("/diario", dependencies=[solo_admin], response_model=list[VentaPorDia])
@@ -306,6 +307,11 @@ def reporte_contabilidad(
     if desde > hasta:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, detail="'desde' no puede ser posterior a 'hasta'"
+        )
+    if (hasta - desde).days > MAX_DIAS_CONTABILIDAD:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"El periodo no puede superar {MAX_DIAS_CONTABILIDAD} días",
         )
     inicio = inicio_dia_local_a_utc_naive(desde)
     fin = fin_dia_local_a_utc_naive(hasta)

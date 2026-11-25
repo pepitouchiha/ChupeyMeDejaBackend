@@ -341,3 +341,104 @@ def test_completar_datos_base_asigna_cada_sede():
         with sin_filtro_de_sede(db):
             ids = [s.id for s in nuevas]
             assert db.query(TipoInsumo).filter(TipoInsumo.sede_id.in_(ids)).count() == 10
+
+
+# --- Correcciones de la revisión de código
+
+
+def test_no_se_borra_producto_con_ventas(client, setup):
+    h = _auth(setup["admin_m"])
+    cat = client.post("/categorias", headers=h, json={"nombre": "Revisión"}).json()["id"]
+    prod = client.post("/productos", headers=h, json={"nombre": "Vendido", "categoria_id": cat, "precio": 1000}).json()["id"]
+    if not client.get("/caja/actual", headers=h).json()["abierta"]:
+        assert client.post("/caja/abrir", headers=h, json={"base_inicial": 0}).status_code == 201
+    r = client.post("/ventas", headers=h, json={"items": [{"producto_id": prod, "cantidad": 1}], "metodo_pago": "efectivo"})
+    assert r.status_code == 201, r.text
+    assert client.delete(f"/productos/{prod}", headers=h).status_code == 409
+    assert client.get("/ventas", headers=h).status_code == 200
+
+
+def test_receta_descuenta_stock_en_cada_venta(client, setup):
+    h = _auth(setup["admin_m"])
+    vaso = client.post("/insumos", headers=h, json={"nombre": "Vaso prueba", "tipo": "vaso", "stock": 10}).json()
+    cat = client.post("/categorias", headers=h, json={"nombre": "Con receta"}).json()["id"]
+    prod = client.post("/productos", headers=h, json={"nombre": "Granizado prueba", "categoria_id": cat, "precio": 5000}).json()["id"]
+    client.put(f"/productos/{prod}/insumos", headers=h, json=[{"insumo_id": vaso["id"], "cantidad": 1}])
+    for _ in range(2):
+        r = client.post("/ventas", headers=h, json={"items": [{"producto_id": prod, "cantidad": 2}], "metodo_pago": "efectivo"})
+        assert r.status_code == 201, r.text
+    assert client.get(f"/insumos/{vaso['id']}", headers=h).json()["stock"] == 6
+    movs = client.get(f"/insumos/{vaso['id']}/movimientos", headers=h).json()
+    assert sorted(m["stock_resultante"] for m in movs) == [6, 8, 10]
+
+
+def test_una_sola_caja_abierta_por_sede_en_la_base():
+    import pytest as _pytest
+    from sqlalchemy.exc import IntegrityError
+    from app.db.session import SessionLocal
+    from app.db.tenancy import fijar_sede
+    from app.models.caja import CajaSesion
+    from app.models.sede import Sede
+
+    with SessionLocal() as db:
+        sede = Sede(nombre="Caja doble")
+        db.add(sede)
+        db.commit()
+        fijar_sede(db, sede.id)
+        db.add(CajaSesion(base_inicial=0))
+        db.commit()
+        db.add(CajaSesion(base_inicial=0))
+        with _pytest.raises(IntegrityError):
+            db.commit()
+
+
+def test_ip_falsificada_no_salta_el_limite(client, setup):
+    limitador_login._fallos.clear()
+    for n in range(5):
+        r = client.post("/auth/login", headers={"X-Forwarded-For": f"9.9.9.{n}, 5.5.5.5"},
+                        json={"email": "admin.a@chupe.co", "password": "mala"})
+        assert r.status_code == 401
+    r = client.post("/auth/login", headers={"X-Forwarded-For": "1.1.1.1, 5.5.5.5"},
+                    json={"email": "admin.a@chupe.co", "password": PASSWORD})
+    assert r.status_code == 429
+    limitador_login._fallos.clear()
+
+
+def test_sede_desactivada_solo_la_ve_el_superadmin(client, setup):
+    sede = client.post("/sedes", headers=_auth(setup["sa"]), json={"nombre": "Cerrada", "direccion": None}).json()
+    client.patch(f"/sedes/{sede['id']}", headers=_auth(setup["sa"]), json={"activa": False})
+    assert client.get("/mesas", headers=_auth(setup["dueno"], sede["id"])).status_code == 403
+    assert client.get("/mesas", headers=_auth(setup["sa"], sede["id"])).status_code == 200
+    sedes_dueno = client.post("/auth/login", json={"email": "dueno@chupe.co", "password": PASSWORD}).json()["sedes"]
+    assert sede["id"] not in [s["id"] for s in sedes_dueno]
+
+
+def test_contabilidad_rango_limitado(client, setup):
+    r = client.get("/reportes/contabilidad?desde=2000-01-01&hasta=2026-01-01", headers=_auth(setup["admin_a"]))
+    assert r.status_code == 422
+
+
+def test_entrada_sin_costo_no_borra_costo_unitario(client, setup):
+    h = _auth(setup["admin_a"])
+    ins = client.post("/insumos", headers=h, json={"nombre": "Vodka", "tipo": "licor", "costo_unitario": 50000}).json()
+    r = client.post(f"/insumos/{ins['id']}/entradas", headers=h,
+                    json={"cantidad": 2, "costo_total": 0, "registrar_gasto": False})
+    assert r.status_code == 200, r.text
+    assert r.json()["costo_unitario"] == 50000
+
+
+def test_nombre_solo_espacios_rechazado(client, setup):
+    r = client.patch(f"/sedes/{setup['a']}", headers=_auth(setup["sa"]), json={"nombre": "   "})
+    assert r.status_code == 422
+
+
+def test_esquema_anterior_detiene_el_arranque(tmp_path):
+    import pytest as _pytest
+    from sqlalchemy import create_engine, text
+    from app.db.esquema import EsquemaDesactualizadoError, verificar_esquema
+
+    motor = create_engine(f"sqlite:///{tmp_path / 'vieja.db'}")
+    with motor.begin() as conn:
+        conn.execute(text("CREATE TABLE categorias (id INTEGER PRIMARY KEY, nombre VARCHAR(100))"))
+    with _pytest.raises(EsquemaDesactualizadoError):
+        verificar_esquema(motor)

@@ -106,6 +106,11 @@ class UsuarioUpdate(BaseModel):
     sede_id: int | None = None
     activo: bool | None = None
 
+    @field_validator("nombre")
+    @classmethod
+    def validar_nombre(cls, v: str | None) -> str | None:
+        return None if v is None else _limpiar_texto(v)
+
 
 class RestablecerPasswordRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
@@ -121,3 +126,8 @@ class SedeUpdate(BaseModel):
     nombre: str | None = Field(default=None, min_length=1, max_length=100)
     direccion: str | None = Field(default=None, max_length=200)
     activa: bool | None = None
+
+    @field_validator("nombre")
+    @classmethod
+    def validar_nombre(cls, v: str | None) -> str | None:
+        return None if v is None else _limpiar_texto(v)

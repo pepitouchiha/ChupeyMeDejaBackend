@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import CheckConstraint, DateTime, Integer, String
+from sqlalchemy import CheckConstraint, DateTime, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -13,6 +13,14 @@ class CajaSesion(SedeScoped, Base):
     __tablename__ = "caja_sesiones"
     __table_args__ = (
         CheckConstraint("base_inicial >= 0", name="ck_caja_base_inicial"),
+        # Solo una caja abierta por sede, aunque lleguen dos "Abrir caja" a la vez.
+        Index(
+            "uq_caja_sesion_abierta_por_sede",
+            "sede_id",
+            unique=True,
+            sqlite_where=text("cerrada_en IS NULL"),
+            postgresql_where=text("cerrada_en IS NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

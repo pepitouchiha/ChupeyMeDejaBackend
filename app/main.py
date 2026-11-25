@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import CORS_ORIGINS, ES_PRODUCCION
 from app.db.base_all import Base
+from app.db.esquema import verificar_esquema
 from app.db.session import SessionLocal, engine
 from app.db.tenancy import SedeNoDefinidaError
 from app.routers import (
@@ -35,6 +36,7 @@ logger = logging.getLogger("chupeymedeja")
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Crea las tablas que falten (no modifica tablas existentes).
+    verificar_esquema(engine)
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         completar_datos_base(db)

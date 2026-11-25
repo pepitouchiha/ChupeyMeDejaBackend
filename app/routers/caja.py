@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import require_sede
@@ -95,14 +96,19 @@ def abrir_caja(payload: CajaAbrir, db: Session = Depends(get_db)) -> CajaActualO
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Ya hay una caja abierta")
     sesion = CajaSesion(base_inicial=payload.base_inicial, notas_apertura=payload.notas)
     db.add(sesion)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Otra apertura simultánea ganó (índice único de caja abierta por sede).
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Ya hay una caja abierta")
     db.refresh(sesion)
     return _actual_out(db, sesion)
 
 
 @router.post("/cerrar", response_model=CajaSesionOut)
 def cerrar_caja(payload: CajaCerrar, db: Session = Depends(get_db)) -> CajaSesionOut:
-    sesion = caja_service.sesion_abierta(db)
+    sesion = caja_service.sesion_abierta(db, bloqueo="exclusivo")
     if sesion is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="No hay una caja abierta")
     pendientes = caja_service.contar_pedidos_abiertos(db)

@@ -30,17 +30,29 @@ class ResumenCaja:
     efectivo_esperado: int
 
 
-def sesion_abierta(db: Session) -> CajaSesion | None:
-    return (
+def sesion_abierta(db: Session, bloqueo: str | None = None) -> CajaSesion | None:
+    """Sesión de caja abierta de la sede activa.
+
+    `bloqueo` (solo tiene efecto en PostgreSQL):
+    - "compartido": para registrar ventas o gastos; varias a la vez, pero el
+      cierre espera a que terminen.
+    - "exclusivo": para cerrar; las ventas nuevas esperan y, al terminar el
+      cierre, ya no encuentran la sesión abierta.
+    """
+    query = (
         db.query(CajaSesion)
         .filter(CajaSesion.cerrada_en.is_(None))
         .order_by(CajaSesion.id.desc())
-        .first()
     )
+    if bloqueo == "compartido":
+        query = query.with_for_update(read=True)
+    elif bloqueo == "exclusivo":
+        query = query.with_for_update()
+    return query.first()
 
 
 def exigir_sesion_abierta(db: Session, mensaje: str = MENSAJE_CAJA_CERRADA) -> CajaSesion:
-    sesion = sesion_abierta(db)
+    sesion = sesion_abierta(db, bloqueo="compartido")
     if sesion is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=mensaje)
     return sesion

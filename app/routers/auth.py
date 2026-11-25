@@ -31,8 +31,10 @@ _HASH_FICTICIO = hash_password("no-es-una-contrasena-real-123")
 
 
 def _sedes_visibles(db: Session, usuario: Usuario) -> list[Sede]:
-    if usuario.es_global:
+    if usuario.es_superadmin:
         return db.query(Sede).order_by(Sede.nombre).all()
+    if usuario.es_global:
+        return db.query(Sede).filter(Sede.activa.is_(True)).order_by(Sede.nombre).all()
     return [usuario.sede] if usuario.sede is not None else []
 
 
